@@ -171,6 +171,13 @@ class _ScrollChromeHostState extends State<ScrollChromeHost> {
           notification.metrics.axis != Axis.vertical) {
         return false;
       }
+      // At the very top there is nothing to scroll away from, so the chrome
+      // stays: an overscroll bounce must not cost the reader the bars.
+      if (notification.metrics.extentBefore <= 0) {
+        _accumulated = 0;
+        widget.controller.show();
+        return false;
+      }
       _accumulated =
           delta.sign == _accumulated.sign ? _accumulated + delta : delta;
       if (_accumulated > ScrollChromeHost.switchThreshold) {

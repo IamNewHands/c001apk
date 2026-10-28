@@ -26,6 +26,9 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage>
     with SingleTickerProviderStateMixin {
+  /// Destination order is 主页 / 关注 / 我的.
+  static const int _profileDestination = 2;
+
   bool _homeFeedSelected = true;
   late final _publishAnimation = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 300), value: 1);
@@ -83,6 +86,8 @@ class _MainPageState extends State<MainPage>
             stream: _indexSctream.stream,
             builder: (_, snapshot) => AdaptiveMainScaffold(
               selectedIndex: snapshot.data!,
+              // 「我的」is not a scrolling feed, so it keeps the chrome fixed.
+              autoHideChrome: snapshot.data != _profileDestination,
               railTrailing: GlobalData().isLogin &&
                       snapshot.data == 0 &&
                       _homeFeedSelected

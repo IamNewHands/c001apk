@@ -35,11 +35,14 @@ void main() {
     WidgetTester tester, {
     double width = 400,
     Widget? body,
+    int selectedIndex = 0,
+    bool autoHideChrome = true,
+    TargetPlatform platform = TargetPlatform.android,
   }) async {
     await tester.binding.setSurfaceSize(Size(width, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(MaterialApp(
-      theme: ThemeData(platform: TargetPlatform.android),
+      theme: ThemeData(platform: platform),
       home: MediaQuery(
         data: MediaQueryData(
           size: Size(width, 800),
@@ -47,7 +50,8 @@ void main() {
           viewPadding: const EdgeInsets.only(bottom: 24),
         ),
         child: AdaptiveMainScaffold(
-          selectedIndex: 0,
+          selectedIndex: selectedIndex,
+          autoHideChrome: autoHideChrome,
           onDestinationSelected: (_) {},
           bodyBuilder: (_, __) => body ?? feed(),
         ),
@@ -141,6 +145,38 @@ void main() {
     await tester.runAsync(
         () => GStorage.settings.put('scrollChromeAutoHide', false));
     await mount(tester);
+    final bar = rectOf(tester, find.byType(LiquidNavigationBar));
+
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(rectOf(tester, find.byType(LiquidNavigationBar)), bar);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a pull at the very top leaves the chrome alone', (tester) async {
+    // iOS bounces, which is the only platform that reports scroll updates while
+    // the offset is still pinned at the top.
+    await mount(tester, platform: TargetPlatform.iOS);
+    final bar = find.byType(LiquidNavigationBar);
+    final shown = rectOf(tester, bar);
+
+    await tester.drag(find.byType(ListView), const Offset(0, 200));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
+
+    // Real reading still hides it.
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a destination without a feed keeps the chrome fixed',
+      (tester) async {
+    await mount(tester, selectedIndex: 2, autoHideChrome: false);
     final bar = rectOf(tester, find.byType(LiquidNavigationBar));
 
     await tester.drag(find.byType(ListView), const Offset(0, -300));

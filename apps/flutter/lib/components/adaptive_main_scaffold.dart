@@ -14,12 +14,17 @@ class AdaptiveMainScaffold extends StatefulWidget {
     required this.onDestinationSelected,
     required this.bodyBuilder,
     this.railTrailing,
+    this.autoHideChrome = true,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
   final Widget Function(BuildContext context, bool useRail) bodyBuilder;
   final Widget? railTrailing;
+
+  /// False for destinations that are not a scrolling feed, which keep the
+  /// chrome exactly where it has always been.
+  final bool autoHideChrome;
 
   @override
   State<AdaptiveMainScaffold> createState() => _AdaptiveMainScaffoldState();
@@ -66,9 +71,12 @@ class _AdaptiveMainScaffoldState extends State<AdaptiveMainScaffold>
           final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
           final floating = GStorage.floatingNavigation;
           final keyboard = MediaQuery.viewInsetsOf(context).bottom > 0;
-          // The rail never hides and the keyboard owns the screen, so only the
-          // surfaces that can actually leave stay reachable.
-          final frozen = keyboard || !GStorage.scrollChromeAutoHide;
+          // The rail never hides, the keyboard owns the screen, and a page
+          // without a feed has nothing to scroll away from, so only surfaces
+          // that can actually leave stay reachable.
+          final frozen = keyboard ||
+              !widget.autoHideChrome ||
+              !GStorage.scrollChromeAutoHide;
           if (frozen && _chrome.hidden) {
             // A frozen surface reports full progress; drop the stale animation
             // value too so unfreezing cannot snap the bars back out.

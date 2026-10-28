@@ -33,6 +33,9 @@ class GStorage {
       settings.get(SettingsBoxKey.liquidGlass, defaultValue: true) == true;
   static LiquidGlassLevel get liquidGlassLevel => LiquidGlassLevel.fromStored(
       settings.get(SettingsBoxKey.liquidGlassLevel));
+  static bool get scrollChromeAutoHide =>
+      settings.get(SettingsBoxKey.scrollChromeAutoHide, defaultValue: true) ==
+      true;
   static late final Box<dynamic> searchHistory;
   static late final Box<dynamic> historyFeed;
   static late final Box<dynamic> favFeed;
@@ -560,6 +563,7 @@ class SettingsBoxKey {
       floatingNavigation = 'floatingNavigation',
       liquidGlass = 'liquidGlass',
       liquidGlassLevel = 'liquidGlassLevel',
+      scrollChromeAutoHide = 'scrollChromeAutoHide',
       followType = 'followType',
       imageQuality = 'imageQuality',
       mediaAutoLoad = MediaAutoLoadMode.storageKey,

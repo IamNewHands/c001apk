@@ -238,6 +238,23 @@ class _SettingsDetailPageState extends State<SettingsDetailPage> {
                       !GStorage.hideHomePublishButton),
                 ),
               ),
+              ValueListenableBuilder(
+                valueListenable: GStorage.settings
+                    .listenable(keys: [SettingsBoxKey.scrollChromeAutoHide]),
+                builder: (context, _, __) => ListTile(
+                  leading: const Icon(Icons.unfold_less),
+                  title: const Text('滚动时自动隐藏顶栏与底栏'),
+                  subtitle: const Text('向下滚动时收起，向上滚动、轻触或停止滚动后恢复'),
+                  trailing: Switch(
+                    value: GStorage.scrollChromeAutoHide,
+                    onChanged: (value) => GStorage.settings
+                        .put(SettingsBoxKey.scrollChromeAutoHide, value),
+                  ),
+                  onTap: () => GStorage.settings.put(
+                      SettingsBoxKey.scrollChromeAutoHide,
+                      !GStorage.scrollChromeAutoHide),
+                ),
+              ),
             ]),
             const ItemTitle(title: '导航栏'),
             const NavigationAppearanceSettings(),

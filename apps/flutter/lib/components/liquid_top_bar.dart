@@ -6,6 +6,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../utils/storage_util.dart';
 import '../utils/extensions.dart';
 import 'basic_glass.dart';
+import 'scroll_chrome.dart';
 export 'basic_glass.dart' show LiquidGlassButton;
 
 /// Root toolbar surfaces share the navigation glass preference and optics.
@@ -51,61 +52,69 @@ class LiquidTopBarScaffold extends StatelessWidget {
           final height = glass
               ? math.max(64.0, media.textScaler.scale(20) + 16)
               : kToolbarHeight;
-          final inset = media.padding.top + height;
+          // Outside a ScrollChromeScope the progress stays 1, so every other
+          // page keeps the full toolbar inset.
+          final inset =
+              media.padding.top + height * ScrollChromeScope.topProgressOf(context);
           final overlay = glass && overlayBody;
           final search = IconButton(
             onPressed: onSearch,
             icon: const Icon(Icons.search),
             tooltip: '搜索',
           );
+          final appBar = AppBar(
+            automaticallyImplyLeading: false,
+            toolbarHeight: height,
+            titleSpacing: glass ? 12 : titleSpacing,
+            backgroundColor: glass ? Colors.transparent : null,
+            forceMaterialTransparency: glass,
+            // Hiding the toolbar leaves the status bar icons as they are.
+            systemOverlayStyle: glass ? context.fitSystemUiOverlayStyle : null,
+            elevation: glass ? 0 : null,
+            scrolledUnderElevation: glass ? 0 : null,
+            title: glass
+                ? Align(
+                    alignment: Alignment.centerLeft,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                          maxWidth: compactTitle ? double.infinity : 720),
+                      child: Row(children: [
+                        Expanded(
+                          child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: SizedBox(
+                                key: const ValueKey('glass-top-title'),
+                                height: height - 16,
+                                child: glassTitle!(context),
+                              )),
+                        ),
+                        if (onSearch != null) ...[
+                          const SizedBox(width: 10),
+                          LiquidGlassButton(
+                            key: const ValueKey('glass-search'),
+                            level: GStorage.liquidGlassLevel,
+                            enabled: GStorage.liquidGlass,
+                            tooltip: '搜索',
+                            height: height - 16,
+                            width: height - 16,
+                            onPressed: onSearch!,
+                            child: const Center(child: Icon(Icons.search)),
+                          ),
+                        ],
+                        if (glassActions != null) ...glassActions!(context),
+                      ]),
+                    ),
+                  )
+                : title,
+            actions: glass ? null : [...actions, if (onSearch != null) search],
+          );
           return Scaffold(
             extendBodyBehindAppBar: true,
-            appBar: AppBar(
-              automaticallyImplyLeading: false,
-              toolbarHeight: height,
-              titleSpacing: glass ? 12 : titleSpacing,
-              backgroundColor: glass ? Colors.transparent : null,
-              forceMaterialTransparency: glass,
-              systemOverlayStyle:
-                  glass ? context.fitSystemUiOverlayStyle : null,
-              elevation: glass ? 0 : null,
-              scrolledUnderElevation: glass ? 0 : null,
-              title: glass
-                  ? Align(
-                      alignment: Alignment.centerLeft,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                            maxWidth: compactTitle ? double.infinity : 720),
-                        child: Row(children: [
-                          Expanded(
-                            child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: SizedBox(
-                                  key: const ValueKey('glass-top-title'),
-                                  height: height - 16,
-                                  child: glassTitle!(context),
-                                )),
-                          ),
-                          if (onSearch != null) ...[
-                            const SizedBox(width: 10),
-                            LiquidGlassButton(
-                              key: const ValueKey('glass-search'),
-                              level: GStorage.liquidGlassLevel,
-                              enabled: GStorage.liquidGlass,
-                              tooltip: '搜索',
-                              height: height - 16,
-                              width: height - 16,
-                              onPressed: onSearch!,
-                              child: const Center(child: Icon(Icons.search)),
-                            ),
-                          ],
-                          if (glassActions != null) ...glassActions!(context),
-                        ]),
-                      ),
-                    )
-                  : title,
-              actions:
-                  glass ? null : [...actions, if (onSearch != null) search],
+            // PreferredSize keeps the slot height identical to the AppBar's own
+            // preferredSize, so the wrapper cannot shift the body layout.
+            appBar: PreferredSize(
+              preferredSize: Size.fromHeight(height),
+              child: ScrollChromeHide(top: true, child: appBar),
             ),
             body: Padding(
               padding: EdgeInsets.only(top: overlay ? 0 : inset),

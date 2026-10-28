@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 
 /// Hides the main chrome while the user scrolls down and restores it on
-/// scroll-up, on tap, or shortly after the scroll settles.
+/// scroll-up or on tap.
+///
+/// Resting the scroll never brings the chrome back: a reader who stops to look
+/// at a card keeps the whole screen, and the bars only return on an explicit
+/// gesture.
 ///
 /// One controller drives both the top toolbar and the bottom navigation so the
 /// two surfaces cannot disagree, and so the body inset can interpolate with the
@@ -12,27 +16,15 @@ class ScrollChromeController extends ChangeNotifier {
           vsync: vsync,
           duration: animationDuration,
           value: 1,
-        ),
-        _hold = AnimationController(vsync: vsync, duration: settleDelay) {
+        ) {
     _animation.addListener(notifyListeners);
-    // The idle delay is a ticker, not a [Timer]: a pending timer outlives the
-    // widget tree and fails widget tests, and a ticker also lets
-    // `pumpAndSettle` drive the restore to completion.
-    _hold.addStatusListener((status) {
-      if (status == AnimationStatus.completed) show();
-    });
   }
 
   /// Long enough to read as a slide, short enough to feel attached to the
   /// gesture.
   static const Duration animationDuration = Duration(milliseconds: 200);
 
-  /// A short flick must not leave the bars hidden, so the chrome returns once
-  /// the scroll has been idle for this long.
-  static const Duration settleDelay = Duration(milliseconds: 500);
-
   final AnimationController _animation;
-  final AnimationController _hold;
 
   /// 1 = fully shown, 0 = fully hidden.
   double get progress => _animation.value;
@@ -40,35 +32,18 @@ class ScrollChromeController extends ChangeNotifier {
   bool get hidden => _animation.value < 1;
 
   void hide() {
-    cancelSettle();
     if (_animation.value == 0) return;
     _animation.animateTo(0, curve: Curves.easeInOutCubicEmphasized);
   }
 
   void show() {
-    cancelSettle();
     if (_animation.value == 1) return;
     _animation.animateTo(1, curve: Curves.easeInOutCubicEmphasized);
-  }
-
-  /// Restore once the scroll has been idle for [settleDelay].
-  void settle() {
-    cancelSettle();
-    // A scroll often ends in the same frame that hid the chrome, so the
-    // animation still reads 1 here; only skip when nothing is moving.
-    if (_animation.value == 1 && !_animation.isAnimating) return;
-    _hold.forward(from: 0);
-  }
-
-  /// Cancels a pending [settle] without changing the current state.
-  void cancelSettle() {
-    if (_hold.isAnimating) _hold.stop();
   }
 
   @override
   void dispose() {
     _animation.removeListener(notifyListeners);
-    _hold.dispose();
     _animation.dispose();
     super.dispose();
   }
@@ -187,7 +162,6 @@ class _ScrollChromeHostState extends State<ScrollChromeHost> {
       return false;
     }
     if (notification is ScrollStartNotification) {
-      widget.controller.cancelSettle();
       _accumulated = 0;
     } else if (notification is ScrollUpdateNotification) {
       final delta = notification.scrollDelta;
@@ -207,8 +181,8 @@ class _ScrollChromeHostState extends State<ScrollChromeHost> {
         widget.controller.show();
       }
     } else if (notification is ScrollEndNotification) {
+      // Deliberately no restore here: a resting scroll keeps the chrome away.
       _accumulated = 0;
-      widget.controller.settle();
     }
     return false;
   }

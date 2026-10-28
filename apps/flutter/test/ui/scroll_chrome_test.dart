@@ -79,7 +79,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('the chrome returns once the scroll stops', (tester) async {
+  testWidgets('the chrome stays away while the scroll rests', (tester) async {
     await mount(tester);
     final bar = find.byType(LiquidNavigationBar);
     final shown = rectOf(tester, bar);
@@ -89,9 +89,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
 
-    // The idle delay is 500ms; the restore animation adds 200ms.
-    await tester.pump(const Duration(milliseconds: 600));
-    await tester.pumpAndSettle();
+    // Stopping to read must not throw the bars back in the reader's face.
+    await tester.pump(const Duration(seconds: 2));
+    expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
+
+    // Only an upward scroll brings them back.
+    await tester.drag(find.byType(ListView), const Offset(0, 300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
     await tester.pumpAndSettle();
   });

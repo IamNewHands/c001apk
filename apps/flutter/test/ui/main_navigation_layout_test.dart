@@ -81,8 +81,8 @@ void main() {
     expect(inset.bottom, 102); // 64 content + 14 top + 24 safe bottom.
     await tester.drag(find.byType(ListView), const Offset(0, -4000));
     await tester.pumpAndSettle();
-    // The bar hides during the drag and returns once the scroll idles, so the
-    // feed keeps the extent it reached with the collapsed inset (safe area only).
+    // The bar hides during the drag and stays away while the scroll rests, so
+    // the feed keeps the extent it reached with the collapsed inset.
     expect(tester.getRect(find.text('项目 29')).bottom, closeTo(776, 0.5));
   });
 

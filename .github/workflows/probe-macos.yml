@@ -1,0 +1,13 @@
+name: probe macos runner
+on: workflow_dispatch
+jobs:
+  probe-26:
+    runs-on: macos-26
+    timeout-minutes: 10
+    steps:
+      - run: uname -a
+  probe-latest:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - run: uname -a

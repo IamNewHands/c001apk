@@ -95,14 +95,22 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  /// Taps [finder]. When [persist] is set the tap starts a save that writes to
+  /// Hive on disk, so the real async work has to run inside
+  /// [WidgetTester.runAsync]; [until] then waits for the state change that
+  /// proves the save landed. A fixed sleep races that write on a loaded CI
+  /// runner and leaves the future pending past teardown.
   Future<void> tap(WidgetTester tester, Finder finder,
-      {bool persist = false}) async {
+      {bool persist = false, bool Function()? until}) async {
     await tester.ensureVisible(finder);
     await tester.pumpAndSettle();
     if (persist) {
       await tester.runAsync(() async {
         await tester.tap(finder);
-        await Future<void>.delayed(const Duration(milliseconds: 50));
+        final deadline = DateTime.now().add(const Duration(seconds: 5));
+        while (until != null && !until() && DateTime.now().isBefore(deadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
       });
     } else {
       await tester.tap(finder);
@@ -136,7 +144,7 @@ void main() {
     expect(find.text('4 / 4'), findsOneWidget);
     expect(identity.calls, 0);
     await tap(tester, find.byKey(const ValueKey('onboarding-next')),
-        persist: true);
+        persist: true, until: () => state.completed);
     expect(GStorage.hideHomePublishButton, isFalse);
     expect(GStorage.floatingNavigation, isFalse);
     expect(filter.enabled, isTrue);
@@ -152,7 +160,8 @@ void main() {
       (tester) async {
     await show(tester);
     await tap(tester, find.text('我也会发布'));
-    await tap(tester, find.text('跳过引导'), persist: true);
+    await tap(tester, find.text('跳过引导'),
+        persist: true, until: () => state.completed);
     expect(GStorage.hideHomePublishButton, isTrue);
     expect(filter.enabled, isFalse);
     expect(state.completed, isTrue);
@@ -185,7 +194,7 @@ void main() {
     await tap(tester, find.byKey(const ValueKey('onboarding-filter-enabled')));
     await next(tester);
     await tap(tester, find.byKey(const ValueKey('onboarding-next')),
-        persist: true);
+        persist: true, until: () => state.completed);
     expect(GStorage.floatingNavigation, isTrue);
     expect(GStorage.liquidGlass, isFalse);
     expect(filter.enabled, isFalse);
@@ -231,7 +240,7 @@ void main() {
     }
     expect(find.text('4 / 4'), findsOneWidget);
     await tap(tester, find.byKey(const ValueKey('onboarding-next')),
-        persist: true);
+        persist: true, until: () => state.completed);
     expect(state.completed, isTrue);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -254,7 +263,7 @@ void main() {
         expect(tester.takeException(), isNull);
       }
       await tap(tester, find.byKey(const ValueKey('onboarding-next')),
-          persist: true);
+          persist: true, until: () => state.completed);
       expect(state.completed, isTrue);
       expect(GStorage.hideHomePublishButton, isFalse);
       expect(tester.takeException(), isNull);

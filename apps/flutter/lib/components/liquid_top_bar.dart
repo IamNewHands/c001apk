@@ -52,11 +52,18 @@ class LiquidTopBarScaffold extends StatelessWidget {
           final height = glass
               ? math.max(64.0, media.textScaler.scale(20) + 16)
               : kToolbarHeight;
+          final overlay = glass && overlayBody;
+          final progress = ScrollChromeScope.topProgressOf(context);
           // Outside a ScrollChromeScope the progress stays 1, so every other
           // page keeps the full toolbar inset.
+          //
+          // A glass bar paints over the feed, so the feed keeps one inset
+          // whether the bar is on screen or not and the content simply scrolls
+          // under it. Growing the inset as the bar docked is what made the feed
+          // shift whenever the bars came back. The plain toolbar owns a real
+          // strip instead, so there the body has to follow it.
           final inset =
-              media.padding.top + height * ScrollChromeScope.topProgressOf(context);
-          final overlay = glass && overlayBody;
+              media.padding.top + (overlay ? height : height * progress);
           final search = IconButton(
             onPressed: onSearch,
             icon: const Icon(Icons.search),

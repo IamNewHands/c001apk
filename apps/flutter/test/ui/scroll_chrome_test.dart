@@ -32,15 +32,24 @@ void main() {
         body: feed(),
       );
 
-  /// A feed that reserves the bottom inset the way the real pages do, so a
-  /// change of inset would move its content.
+  /// A feed that reserves the insets the way the real pages do, so a change of
+  /// inset would move its content.
   Widget insetFeed() => Builder(
         builder: (context) => ListView.builder(
-          padding:
-              EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
+          padding: EdgeInsets.only(
+            top: MediaQuery.paddingOf(context).top,
+            bottom: MediaQuery.paddingOf(context).bottom,
+          ),
           itemCount: 30,
           itemBuilder: (_, i) => SizedBox(height: 100, child: Text('项目 $i')),
         ),
+      );
+
+  /// The root page shape: a glass toolbar painting over the feed.
+  Widget glassTopBarPage() => LiquidTopBarScaffold(
+        title: const Text('标题'),
+        glassTitle: (_) => const Text('c001apk'),
+        body: insetFeed(),
       );
 
   Future<void> mount(
@@ -108,7 +117,7 @@ void main() {
 
     // The reveal has to be earned: 1.5s of uninterrupted scrolling up.
     await tester.pump(const Duration(milliseconds: 200));
-    await holdScrollUp(tester, const Duration(milliseconds: 1800));
+    await holdScrollUp(tester, const Duration(milliseconds: 2400));
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
@@ -128,7 +137,7 @@ void main() {
 
     // Only a sustained upward scroll brings them back.
     await tester.pump(const Duration(milliseconds: 200));
-    await holdScrollUp(tester, const Duration(milliseconds: 1800));
+    await holdScrollUp(tester, const Duration(milliseconds: 2400));
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
@@ -249,8 +258,7 @@ void main() {
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
   });
 
-  testWidgets('the bars wait a second and a half of scrolling up',
-      (tester) async {
+  testWidgets('the bars wait two seconds of scrolling up', (tester) async {
     await mount(tester);
     final bar = find.byType(LiquidNavigationBar);
     final shown = rectOf(tester, bar);
@@ -258,14 +266,14 @@ void main() {
 
     final gesture =
         await tester.startGesture(tester.getCenter(find.byType(ListView)));
-    for (var i = 0; i < 12; i++) {
+    for (var i = 0; i < 15; i++) {
       await gesture.moveBy(const Offset(0, 20));
       await tester.pump(const Duration(milliseconds: 100));
     }
-    // 1.2s of uninterrupted upward travel is still not enough.
+    // 1.5s of uninterrupted upward travel is still not enough.
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
 
-    for (var i = 0; i < 8; i++) {
+    for (var i = 0; i < 12; i++) {
       await gesture.moveBy(const Offset(0, 20));
       await tester.pump(const Duration(milliseconds: 100));
     }
@@ -282,43 +290,70 @@ void main() {
     expect(controller.hidden, isTrue);
 
     // A flick keeps the feed gliding long after the finger left the screen.
-    // Three seconds of coasting upward is the feed running out, not a reader
-    // asking for the chrome.
+    // Three seconds of coasting is the feed running out, not a reader asking
+    // for the chrome: scroll frames can only ever hide.
     for (var i = 0; i < 30; i++) {
-      controller.scrollBy(-40, atTop: false, dragging: false);
+      controller.scrollBy(-40, atTop: false);
       await tester.pump(const Duration(milliseconds: 100));
     }
     expect(controller.hidden, isTrue);
 
     // The same travel under a finger is exactly the gesture that earns them.
-    for (var i = 0; i < 20; i++) {
-      controller.scrollBy(-40, atTop: false, dragging: true);
+    controller.pointerDown();
+    for (var i = 0; i < 24; i++) {
+      controller.pointerMoved(40);
       await tester.pump(const Duration(milliseconds: 100));
     }
     await tester.pumpAndSettle();
     expect(controller.hidden, isFalse);
   });
 
-  testWidgets('the feed keeps its inset when the bars come back',
+  testWidgets('gliding back to the top does not bring the bars back',
       (tester) async {
-    await mount(tester, body: insetFeed());
+    await mount(tester);
     final bar = find.byType(LiquidNavigationBar);
     final shown = rectOf(tester, bar);
-    double inset() =>
-        MediaQuery.of(tester.element(find.byType(ListView))).padding.bottom;
+    await hideBar(tester, bar, shown, distance: -800);
 
-    expect(inset(), 102);
-    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    // The finger is gone before the feed reaches the top, so everything from
+    // here on is the fling running out.
+    await tester.fling(find.byType(ListView), const Offset(0, 900), 4000);
     await tester.pumpAndSettle();
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
-    // Leaving must not hand the space back to the feed, and docking must not
-    // take it away again: either one moves the content under the reader.
-    expect(inset(), 102);
+  });
 
-    await tester.tapAt(const Offset(200, 300));
+  testWidgets('bringing the bars back does not move the feed', (tester) async {
+    await mount(tester, body: glassTopBarPage());
+    final bar = find.byType(LiquidNavigationBar);
+    final appBar = find.byType(AppBar);
+    final shownBar = rectOf(tester, bar);
+    EdgeInsets padding() =>
+        tester.widget<ListView>(find.byType(ListView)).padding! as EdgeInsets;
+    final item = find.text('项目 3');
+
+    final reserved = padding();
+    // The glass toolbar and the glass bar both paint over the feed, so the feed
+    // reserves their two strips: 64 of toolbar (this harness has no status bar)
+    // on top, 78 of bar plus the 24 safe area below.
+    expect(reserved.top, 64);
+    expect(reserved.bottom, 102);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
     await tester.pumpAndSettle();
-    expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
-    expect(inset(), 102);
+    expect(rectOf(tester, appBar).top, lessThan(-1));
+    expect(rectOf(tester, bar).top, greaterThan(shownBar.top + 1));
+    // Hiding must not hand the space back to the feed.
+    expect(padding(), reserved);
+    final itemTop = rectOf(tester, item).top;
+
+    await tester.tapAt(const Offset(200, 400));
+    await tester.pumpAndSettle();
+    expect(rectOf(tester, appBar).top, closeTo(0, 0.5));
+    expect(rectOf(tester, bar).top, closeTo(shownBar.top, 0.5));
+    // Docking must not take it away again: either one moves the content the
+    // reader is looking at.
+    expect(padding(), reserved);
+    expect(rectOf(tester, item).top, closeTo(itemTop, 0.5));
   });
 
   testWidgets('only a bar that is leaving drops the backdrop blur',

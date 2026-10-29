@@ -44,7 +44,7 @@ class ScrollChromeController extends ChangeNotifier {
   /// interruption, before the chrome returns. A short flick up to re-read one
   /// line is not a request for the bars, and neither is the momentum that
   /// carries the feed on after the finger leaves.
-  static const Duration showDelay = Duration(milliseconds: 1500);
+  static const Duration showDelay = Duration(seconds: 2);
 
   /// The opposite direction is ignored for this long after a flip, so a flip
   /// always finishes its animation instead of being reversed mid-slide.
@@ -53,7 +53,7 @@ class ScrollChromeController extends ChangeNotifier {
   final AnimationController _animation, _delay, _lock;
 
   double _down = 0, _up = 0;
-  bool _pendingShow = false;
+  bool _revealPending = false;
   bool _leaving = false;
 
   /// 1 = fully shown, 0 = fully hidden.
@@ -71,38 +71,49 @@ class ScrollChromeController extends ChangeNotifier {
   /// direction of a curved [AnimationController.animateTo] reliably.
   bool get hiding => _leaving;
 
-  /// Feeds one vertical scroll frame. [delta] is positive when the content
-  /// moves up the screen, i.e. the reader is going further down the feed.
+  /// Feeds one vertical scroll frame that carries the reader further down the
+  /// feed.
   ///
-  /// [dragging] is false for the momentum that keeps the feed gliding after the
-  /// finger leaves the screen. Momentum still hides the chrome, because that is
-  /// what a flick down should do, but it never reveals it: a glide that happens
-  /// to point up is the feed coasting, not a reader asking for the bars.
-  void scrollBy(double delta, {required bool atTop, bool dragging = true}) {
-    if (delta == 0) return;
+  /// Only hiding comes from the scroll physics. Momentum is welcome to finish
+  /// taking the bars away, but it can never bring them back: the reveal is
+  /// driven by the finger itself, through [pointerMoved], so no amount of
+  /// coasting, bouncing or clamping can put the bars back on screen.
+  void scrollBy(double delta, {required bool atTop}) {
+    if (delta <= 0) return;
     // At the very top there is nothing to scroll away from, so the chrome
     // stays: an overscroll bounce must not cost the reader the bars.
     if (atTop) {
       _reset();
-      if (hidden) show();
       return;
     }
     if (locked) return;
-    if (delta > 0) {
-      _up = 0;
-      _pendingShow = false;
-      _stopDelay();
-      _down += delta;
-      if (_down >= hideThreshold) {
-        _down = 0;
-        hide();
-      }
+    _reset();
+    _down += delta;
+    if (_down >= hideThreshold) {
+      _down = 0;
+      hide();
+    }
+  }
+
+  /// A finger touched the feed. Nothing is earned yet; the clock starts on the
+  /// first frame that travels in the reveal direction.
+  void pointerDown() => _reset();
+
+  /// The finger travelled [dy] pixels down the screen, which is the direction
+  /// that pushes the feed back towards its top.
+  ///
+  /// The reveal is earned by the finger, not by the content: [dy] only ever
+  /// comes from a pointer that is still on the screen, so the clock it starts
+  /// dies the moment the finger lifts.
+  void pointerMoved(double dy) {
+    if (!hidden || locked) return;
+    if (dy <= 0) {
+      // The finger turned around, so the travel so far is a re-read, not a
+      // request for the chrome.
+      _reset();
       return;
     }
-    _down = 0;
-    if (!hidden) return;
-    if (!dragging) return;
-    _up -= delta;
+    _up += dy;
     if (_delay.value == 0 && !_delay.isAnimating) {
       _delay.forward(from: 0);
     }
@@ -110,10 +121,14 @@ class ScrollChromeController extends ChangeNotifier {
       if (_delay.value >= 1) {
         show();
       } else {
-        _pendingShow = true;
+        _revealPending = true;
       }
     }
   }
+
+  /// The finger left the screen, so any reveal it had not finished earning is
+  /// dropped.
+  void pointerUp() => _reset();
 
   void hide() {
     _leaving = true;
@@ -122,12 +137,6 @@ class ScrollChromeController extends ChangeNotifier {
     _lock.forward(from: 0);
     _animation.animateTo(0, duration: hideDuration, curve: Curves.easeInCubic);
   }
-
-  /// Drops a reveal that was still waiting for the gesture to last long enough.
-  ///
-  /// Called when the finger lifts or the scroll stops: the upward travel only
-  /// counts while it is continuous, so a series of short nudges never adds up.
-  void interrupt() => _reset();
 
   void show() {
     _leaving = false;
@@ -140,7 +149,7 @@ class ScrollChromeController extends ChangeNotifier {
   void _reset() {
     _down = 0;
     _up = 0;
-    _pendingShow = false;
+    _revealPending = false;
     _stopDelay();
   }
 
@@ -151,8 +160,8 @@ class ScrollChromeController extends ChangeNotifier {
 
   void _onShowDelayStatus(AnimationStatus status) {
     if (status != AnimationStatus.completed) return;
-    final showNow = _pendingShow && _up >= showThreshold;
-    _pendingShow = false;
+    final showNow = _revealPending && _up >= showThreshold;
+    _revealPending = false;
     if (showNow) show();
   }
 
@@ -312,15 +321,46 @@ class ScrollChromeHost extends StatefulWidget {
 }
 
 class _ScrollChromeHostState extends State<ScrollChromeHost> {
+  /// A finger that wandered further than this was dragging the feed, not
+  /// tapping it.
+  static const double _tapSlop = 16;
+
+  Offset? _downAt;
+  bool _wandered = false;
+
+  void _handleDown(PointerDownEvent event) {
+    _downAt = event.position;
+    _wandered = false;
+    widget.controller.pointerDown();
+  }
+
+  void _handleMove(PointerMoveEvent event) {
+    final down = _downAt;
+    if (down != null && (event.position - down).distance > _tapSlop) {
+      _wandered = true;
+    }
+    widget.controller.pointerMoved(event.delta.dy);
+  }
+
+  void _handleUp(PointerEvent event) {
+    final down = _downAt;
+    _downAt = null;
+    widget.controller.pointerUp();
+    // A tap, and only a tap, is the manual way back to a full bar. It is
+    // detected here rather than with a [GestureDetector] because a gesture
+    // recognizer on this level competes in the arena with every card and
+    // button below it, and a raw pointer never does.
+    final wandered = _wandered;
+    _wandered = false;
+    if (down != null &&
+        !wandered &&
+        (event.position - down).distance <= _tapSlop) {
+      widget.controller.show();
+    }
+  }
+
   bool _onNotification(ScrollNotification notification) {
     if (!widget.enabled) return false;
-    // A gesture only counts while it is running: lifting the finger or a new
-    // gesture throws away the upward travel that had not yet earned the bars.
-    if (notification is ScrollStartNotification ||
-        notification is ScrollEndNotification) {
-      widget.controller.interrupt();
-      return false;
-    }
     if (notification is ScrollUpdateNotification) {
       final delta = notification.scrollDelta;
       // A horizontal pager must not toggle the chrome of the vertical feed.
@@ -329,27 +369,31 @@ class _ScrollChromeHostState extends State<ScrollChromeHost> {
           notification.metrics.axis != Axis.vertical) {
         return false;
       }
+      // Scroll frames only ever hide the chrome. Momentum, bouncing and
+      // clamping all arrive here, and none of them may bring the bars back.
       widget.controller.scrollBy(
         delta,
         atTop: notification.metrics.extentBefore <= 0,
-        // Momentum frames arrive after the finger is gone; they may finish
-        // hiding the chrome but never bring it back.
-        dragging: notification.dragDetails != null,
       );
     }
     return false;
   }
 
   @override
-  Widget build(BuildContext context) =>
-      NotificationListener<ScrollNotification>(
-        onNotification: _onNotification,
-        child: GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          // Tapping the content is the manual way back to a full bar. The
-          // gesture arena keeps taps on cards and buttons with the child.
-          onTap: widget.enabled ? widget.controller.show : null,
-          child: widget.child,
-        ),
-      );
+  Widget build(BuildContext context) {
+    final enabled = widget.enabled;
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onNotification,
+      child: Listener(
+        // Raw pointers, not scroll deltas: this is what makes the reveal a
+        // property of the finger instead of a property of the content.
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: enabled ? _handleDown : null,
+        onPointerMove: enabled ? _handleMove : null,
+        onPointerUp: enabled ? _handleUp : null,
+        onPointerCancel: enabled ? _handleUp : null,
+        child: widget.child,
+      ),
+    );
+  }
 }

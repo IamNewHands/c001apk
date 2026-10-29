@@ -631,6 +631,17 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pumpAndSettle();
     expect(homePosition.pixels, closeTo(0, 1));
+    // Scrolling up no longer docks the bars, so ask for them the way a reader
+    // does: hold the finger on the feed for two seconds. The category strip
+    // lives in the top bar and stays out of reach until it is back.
+    final hold = await tester.startGesture(const Offset(200, 300));
+    for (var i = 0; i < 24; i++) {
+      await hold.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await hold.up();
+    await tester.pumpAndSettle();
+    expect(homePosition.pixels, closeTo(0, 1));
     await tester.tap(homeCategory('热门'));
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
@@ -1433,10 +1444,10 @@ void main() {
     tester.view.physicalSize = const Size(1280, 800);
     await tester.pumpAndSettle();
     expect(publish, findsNothing, reason: 'hidden state survives widening');
-    // The bars only come back after a full second of continuous scrolling up,
-    // so the gesture has to be held instead of flicked.
+    // The bars only come back after two full seconds of continuous scrolling
+    // up, so the gesture has to be held instead of flicked.
     final gesture = await tester.startGesture(tester.getCenter(scroll));
-    for (var i = 0; i < 16; i++) {
+    for (var i = 0; i < 24; i++) {
       await gesture.moveBy(const Offset(0, 20));
       await tester.pump(const Duration(milliseconds: 100));
     }

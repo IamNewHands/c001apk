@@ -244,7 +244,7 @@ class _SettingsDetailPageState extends State<SettingsDetailPage> {
                 builder: (context, _, __) => ListTile(
                   leading: const Icon(Icons.unfold_less),
                   title: const Text('滚动时自动隐藏顶栏与底栏'),
-                  subtitle: const Text('向下滚动时收起，向上滚动、轻触或停止滚动后恢复'),
+                  subtitle: const Text('向下滚动时收起；向上滚动一段、轻触或回到顶部时恢复'),
                   trailing: Switch(
                     value: GStorage.scrollChromeAutoHide,
                     onChanged: (value) => GStorage.settings

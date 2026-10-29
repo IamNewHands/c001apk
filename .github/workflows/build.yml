@@ -418,10 +418,14 @@ jobs:
       contents: write
     steps:
       - name: Download the packaged IPA
+        # This job needs no source tree, and the workflow's default working
+        # directory points at apps/flutter, which only exists after a checkout.
+        working-directory: ${{ github.workspace }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" -n c001apk-ios-arm64-unsigned -D "$RUNNER_TEMP/dist"
       - name: Publish the single nightly release
+        working-directory: ${{ github.workspace }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

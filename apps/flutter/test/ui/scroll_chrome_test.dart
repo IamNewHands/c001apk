@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:c001apk_flutter/components/adaptive_main_scaffold.dart';
 import 'package:c001apk_flutter/components/liquid_navigation_bar.dart';
 import 'package:c001apk_flutter/components/liquid_top_bar.dart';
+import 'package:c001apk_flutter/components/scroll_chrome.dart';
 import 'package:c001apk_flutter/utils/storage_util.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,6 +30,17 @@ void main() {
   Widget topBarPage() => LiquidTopBarScaffold(
         title: const Text('标题'),
         body: feed(),
+      );
+
+  /// A feed that reserves the bottom inset the way the real pages do, so a
+  /// change of inset would move its content.
+  Widget insetFeed() => Builder(
+        builder: (context) => ListView.builder(
+          padding:
+              EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom),
+          itemCount: 30,
+          itemBuilder: (_, i) => SizedBox(height: 100, child: Text('项目 $i')),
+        ),
       );
 
   Future<void> mount(
@@ -94,9 +106,9 @@ void main() {
     // Fully hidden means translated by exactly its own height.
     expect(hidden.top - shown.top, closeTo(shown.height, 0.5));
 
-    // The reveal has to be earned: one uninterrupted second of scrolling up.
+    // The reveal has to be earned: 1.5s of uninterrupted scrolling up.
     await tester.pump(const Duration(milliseconds: 200));
-    await holdScrollUp(tester, const Duration(milliseconds: 1600));
+    await holdScrollUp(tester, const Duration(milliseconds: 1800));
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
@@ -116,7 +128,7 @@ void main() {
 
     // Only a sustained upward scroll brings them back.
     await tester.pump(const Duration(milliseconds: 200));
-    await holdScrollUp(tester, const Duration(milliseconds: 1600));
+    await holdScrollUp(tester, const Duration(milliseconds: 1800));
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
@@ -237,7 +249,8 @@ void main() {
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
   });
 
-  testWidgets('the bars wait a full second of scrolling up', (tester) async {
+  testWidgets('the bars wait a second and a half of scrolling up',
+      (tester) async {
     await mount(tester);
     final bar = find.byType(LiquidNavigationBar);
     final shown = rectOf(tester, bar);
@@ -245,11 +258,11 @@ void main() {
 
     final gesture =
         await tester.startGesture(tester.getCenter(find.byType(ListView)));
-    for (var i = 0; i < 8; i++) {
+    for (var i = 0; i < 12; i++) {
       await gesture.moveBy(const Offset(0, 20));
       await tester.pump(const Duration(milliseconds: 100));
     }
-    // 800ms of uninterrupted upward travel is still not enough.
+    // 1.2s of uninterrupted upward travel is still not enough.
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
 
     for (var i = 0; i < 8; i++) {
@@ -261,17 +274,74 @@ void main() {
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
-  testWidgets('a moving bar paints no backdrop blur', (tester) async {
+  testWidgets('momentum never earns the bars', (tester) async {
+    final controller = ScrollChromeController(vsync: const TestVSync());
+    addTearDown(controller.dispose);
+    controller.hide();
+    await tester.pumpAndSettle();
+    expect(controller.hidden, isTrue);
+
+    // A flick keeps the feed gliding long after the finger left the screen.
+    // Three seconds of coasting upward is the feed running out, not a reader
+    // asking for the chrome.
+    for (var i = 0; i < 30; i++) {
+      controller.scrollBy(-40, atTop: false, dragging: false);
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(controller.hidden, isTrue);
+
+    // The same travel under a finger is exactly the gesture that earns them.
+    for (var i = 0; i < 20; i++) {
+      controller.scrollBy(-40, atTop: false, dragging: true);
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await tester.pumpAndSettle();
+    expect(controller.hidden, isFalse);
+  });
+
+  testWidgets('the feed keeps its inset when the bars come back',
+      (tester) async {
+    await mount(tester, body: insetFeed());
+    final bar = find.byType(LiquidNavigationBar);
+    final shown = rectOf(tester, bar);
+    double inset() =>
+        MediaQuery.of(tester.element(find.byType(ListView))).padding.bottom;
+
+    expect(inset(), 102);
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
+    // Leaving must not hand the space back to the feed, and docking must not
+    // take it away again: either one moves the content under the reader.
+    expect(inset(), 102);
+
+    await tester.tapAt(const Offset(200, 300));
+    await tester.pumpAndSettle();
+    expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
+    expect(inset(), 102);
+  });
+
+  testWidgets('only a bar that is leaving drops the backdrop blur',
+      (tester) async {
     await mount(tester);
     // Docked, the bar samples the feed behind it.
     expect(find.byType(BackdropFilter), findsWidgets);
 
     await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    // Sliding out: flat tint, no sample, no paint.
+    expect(find.byType(BackdropFilter), findsNothing);
     await tester.pumpAndSettle();
-    // Off screen and flat: no sample and no paint while the reader reads.
+    // Gone and flat while the reader reads.
     expect(find.byType(BackdropFilter), findsNothing);
 
+    // Arriving, the blur is on from the first frame, so docking does not pop
+    // the surface in the last one.
     await tester.tapAt(const Offset(200, 400));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(find.byType(BackdropFilter), findsWidgets);
     await tester.pumpAndSettle();
     expect(find.byType(BackdropFilter), findsWidgets);
   });

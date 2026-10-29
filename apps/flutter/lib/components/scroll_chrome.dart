@@ -40,10 +40,11 @@ class ScrollChromeController extends ChangeNotifier {
   /// threshold, so only a real scroll-up counts.
   static const double showThreshold = 72;
 
-  /// The upward gesture has to last this long, uninterrupted, before the chrome
-  /// returns. A short flick up to re-read one line is not a request for the
-  /// bars, and releasing the finger restarts the clock.
-  static const Duration showDelay = Duration(seconds: 1);
+  /// The finger has to stay on the screen and travel up for this long, without
+  /// interruption, before the chrome returns. A short flick up to re-read one
+  /// line is not a request for the bars, and neither is the momentum that
+  /// carries the feed on after the finger leaves.
+  static const Duration showDelay = Duration(milliseconds: 1500);
 
   /// The opposite direction is ignored for this long after a flip, so a flip
   /// always finishes its animation instead of being reversed mid-slide.
@@ -53,6 +54,7 @@ class ScrollChromeController extends ChangeNotifier {
 
   double _down = 0, _up = 0;
   bool _pendingShow = false;
+  bool _leaving = false;
 
   /// 1 = fully shown, 0 = fully hidden.
   double get progress => _animation.value;
@@ -63,9 +65,20 @@ class ScrollChromeController extends ChangeNotifier {
   /// so the animation is never cut in half.
   bool get locked => _lock.isAnimating;
 
+  /// True while the chrome is on its way out.
+  ///
+  /// Tracked by hand because [AnimationController.status] does not report the
+  /// direction of a curved [AnimationController.animateTo] reliably.
+  bool get hiding => _leaving;
+
   /// Feeds one vertical scroll frame. [delta] is positive when the content
   /// moves up the screen, i.e. the reader is going further down the feed.
-  void scrollBy(double delta, {required bool atTop}) {
+  ///
+  /// [dragging] is false for the momentum that keeps the feed gliding after the
+  /// finger leaves the screen. Momentum still hides the chrome, because that is
+  /// what a flick down should do, but it never reveals it: a glide that happens
+  /// to point up is the feed coasting, not a reader asking for the bars.
+  void scrollBy(double delta, {required bool atTop, bool dragging = true}) {
     if (delta == 0) return;
     // At the very top there is nothing to scroll away from, so the chrome
     // stays: an overscroll bounce must not cost the reader the bars.
@@ -88,6 +101,7 @@ class ScrollChromeController extends ChangeNotifier {
     }
     _down = 0;
     if (!hidden) return;
+    if (!dragging) return;
     _up -= delta;
     if (_delay.value == 0 && !_delay.isAnimating) {
       _delay.forward(from: 0);
@@ -102,6 +116,7 @@ class ScrollChromeController extends ChangeNotifier {
   }
 
   void hide() {
+    _leaving = true;
     _reset();
     if (_animation.value == 0) return;
     _lock.forward(from: 0);
@@ -115,6 +130,7 @@ class ScrollChromeController extends ChangeNotifier {
   void interrupt() => _reset();
 
   void show() {
+    _leaving = false;
     _reset();
     if (_animation.value == 1) return;
     _lock.forward(from: 0);
@@ -179,6 +195,14 @@ class ScrollChromeScope extends InheritedNotifier<ScrollChromeController> {
   static double bottomProgressOf(BuildContext context) =>
       _progressOf(context, false);
 
+  /// True while the chrome is sliding out, false when it is docked or arriving.
+  static bool hidingOf(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<ScrollChromeScope>()
+          ?.notifier
+          ?.hiding ??
+      false;
+
   static double _progressOf(BuildContext context, bool top) {
     final scope =
         context.dependOnInheritedWidgetOfExactType<ScrollChromeScope>();
@@ -239,8 +263,14 @@ class ScrollChromeHide extends StatelessWidget {
         ? ScrollChromeScope.topProgressOf(context)
         : ScrollChromeScope.bottomProgressOf(context);
     final slide = 1 - progress;
+    // A bar that is leaving, or already gone, paints its tint flat: sampling
+    // the backdrop while it slides is the expensive half of the glass effect
+    // and nobody can see it. A bar that is arriving keeps the blur the whole
+    // way in, because switching it on in the final frame popped the surface and
+    // read as a jump right as it docked.
+    final moving = ScrollChromeScope.hidingOf(context) || slide >= 1;
     return GlassMotionScope(
-      moving: slide > 0,
+      moving: moving,
       child: FractionalTranslation(
         translation: Offset(0, top ? -slide : slide),
         // Hit testing follows the untranslated slot; [IgnorePointer] is what
@@ -302,6 +332,9 @@ class _ScrollChromeHostState extends State<ScrollChromeHost> {
       widget.controller.scrollBy(
         delta,
         atTop: notification.metrics.extentBefore <= 0,
+        // Momentum frames arrive after the finger is gone; they may finish
+        // hiding the chrome but never bring it back.
+        dragging: notification.dragDetails != null,
       );
     }
     return false;

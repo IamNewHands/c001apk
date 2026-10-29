@@ -64,8 +64,7 @@ class _AdaptiveMainScaffoldState extends State<AdaptiveMainScaffold>
         builder: (context, _, __) =>
             LayoutBuilder(builder: (context, constraints) {
           final outerPadding = MediaQuery.paddingOf(context);
-          final useRail =
-              constraints.maxWidth - outerPadding.horizontal >= 600;
+          final useRail = constraints.maxWidth - outerPadding.horizontal >= 600;
           // Scaffold zeroes viewPadding for its body, so the safe inset has to
           // be read above it.
           final safeBottom = MediaQuery.viewPaddingOf(context).bottom;
@@ -80,8 +79,7 @@ class _AdaptiveMainScaffoldState extends State<AdaptiveMainScaffold>
           if (frozen && _chrome.hidden) {
             // A frozen surface reports full progress; drop the stale animation
             // value too so unfreezing cannot snap the bars back out.
-            WidgetsBinding.instance
-                .addPostFrameCallback((_) => _chrome.show());
+            WidgetsBinding.instance.addPostFrameCallback((_) => _chrome.show());
           }
           return ScrollChromeScope(
             controller: _chrome,
@@ -100,14 +98,18 @@ class _AdaptiveMainScaffoldState extends State<AdaptiveMainScaffold>
                   final reserve = !useRail && !keyboard && !floating;
                   // extendBody hands the body a bottom padding that already covers
                   // the bar and the safe area; collapse it to the safe area only.
-                  final progress =
-                      ScrollChromeScope.bottomProgressOf(context);
+                  final progress = ScrollChromeScope.bottomProgressOf(context);
                   final bottom = media.padding.bottom;
-                  // extendBody adds the bar height on top of the safe area; keep
-                  // the safe area and slide only the bar's own share away.
+                  // extendBody adds the bar height on top of the safe area.
                   final share = bottom - safeBottom;
-                  final inset =
-                      share <= 0 ? bottom : safeBottom + share * progress;
+                  // A floating bar paints over the feed, so the feed keeps one
+                  // inset whether the bar is on screen or not: letting the inset
+                  // grow as the bar docked is what made the content, and the
+                  // publish button, jump on the way back. The opaque bar owns a
+                  // real strip instead, so there the body follows its share.
+                  final inset = !reserve || share <= 0
+                      ? bottom
+                      : safeBottom + share * progress;
                   return Padding(
                     padding: EdgeInsets.only(bottom: reserve ? inset : 0),
                     child: MediaQuery(

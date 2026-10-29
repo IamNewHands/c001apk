@@ -81,9 +81,10 @@ void main() {
     expect(inset.bottom, 102); // 64 content + 14 top + 24 safe bottom.
     await tester.drag(find.byType(ListView), const Offset(0, -4000));
     await tester.pumpAndSettle();
-    // The bar hides during the drag and stays away while the scroll rests, so
-    // the feed keeps the extent it reached with the collapsed inset.
-    expect(tester.getRect(find.text('项目 29')).bottom, closeTo(776, 0.5));
+    // The bar hides during the drag, but the feed keeps one inset whether the
+    // bar is up or down, so the last post ends above the bar's slot instead of
+    // sliding under it.
+    expect(tester.getRect(find.text('项目 29')).bottom, closeTo(698, 0.5));
   });
 
   testWidgets(

@@ -31,7 +31,7 @@ class AdaptiveMainScaffold extends StatefulWidget {
 }
 
 class _AdaptiveMainScaffoldState extends State<AdaptiveMainScaffold>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late final ScrollChromeController _chrome =
       ScrollChromeController(vsync: this);
 

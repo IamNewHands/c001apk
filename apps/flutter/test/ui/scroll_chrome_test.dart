@@ -76,11 +76,12 @@ void main() {
     // Fully hidden means translated by exactly its own height.
     expect(hidden.top - shown.top, closeTo(shown.height, 0.5));
 
+    // A flip locks the opposite direction for 400ms; a reader takes at least
+    // that long before scrolling back up.
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.drag(find.byType(ListView), const Offset(0, 300));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
     await tester.pumpAndSettle();
+    expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
   testWidgets('the chrome stays away while the scroll rests', (tester) async {
@@ -98,11 +99,12 @@ void main() {
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
 
     // Only an upward scroll brings them back.
+    // A flip locks the opposite direction for 400ms; a reader takes at least
+    // that long before scrolling back up.
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.drag(find.byType(ListView), const Offset(0, 300));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
     await tester.pumpAndSettle();
+    expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
   testWidgets('a tap on the content brings the chrome back', (tester) async {
@@ -117,10 +119,8 @@ void main() {
 
     // Tapping still reaches the content, so cards stay openable.
     await tester.tapAt(const Offset(200, 400));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
     await tester.pumpAndSettle();
+    expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
   testWidgets('the rail stays put while the toolbar still hides', (tester) async {
@@ -184,6 +184,56 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
     expect(rectOf(tester, find.byType(LiquidNavigationBar)), bar);
     await tester.pumpAndSettle();
+  });
+
+  /// Hides the bar and waits out the direction lock, which is what a reader
+  /// does before scrolling the other way.
+  Future<void> hideBar(WidgetTester tester, Finder bar, Rect shown) async {
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
+  }
+
+  testWidgets('a short nudge up leaves the chrome hidden', (tester) async {
+    await mount(tester);
+    final bar = find.byType(LiquidNavigationBar);
+    final shown = rectOf(tester, bar);
+    await hideBar(tester, bar, shown);
+
+    // Well under the show threshold: the reader is still on the same post.
+    await tester.drag(find.byType(ListView), const Offset(0, 40));
+    await tester.pumpAndSettle();
+    expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
+  });
+
+  testWidgets('a decisive scroll-up waits out the dwell', (tester) async {
+    await mount(tester);
+    final bar = find.byType(LiquidNavigationBar);
+    final shown = rectOf(tester, bar);
+    await hideBar(tester, bar, shown);
+
+    await tester.drag(find.byType(ListView), const Offset(0, 300));
+    await tester.pump(const Duration(milliseconds: 100));
+    // Past the threshold, but the upward motion has not lasted long enough.
+    expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
+
+    await tester.pumpAndSettle();
+    expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
+  });
+
+  testWidgets('a moving bar paints no backdrop blur', (tester) async {
+    await mount(tester);
+    // Docked, the bar samples the feed behind it.
+    expect(find.byType(BackdropFilter), findsWidgets);
+
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    // Off screen and flat: no sample and no paint while the reader reads.
+    expect(find.byType(BackdropFilter), findsNothing);
+
+    await tester.tapAt(const Offset(200, 400));
+    await tester.pumpAndSettle();
+    expect(find.byType(BackdropFilter), findsWidgets);
   });
 
   testWidgets('without a scope the toolbar keeps the full inset', (tester) async {

@@ -63,6 +63,8 @@ void main() {
           ),
           child: AdaptiveMainScaffold(
             selectedIndex: 2,
+            // 「我的」 is not a feed, so the page never auto-hides its chrome.
+            autoHideChrome: false,
             onDestinationSelected: (_) {},
             bodyBuilder: (_, __) => const MessagePage(),
           ),

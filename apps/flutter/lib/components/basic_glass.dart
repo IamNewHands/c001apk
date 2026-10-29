@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../constants/liquid_glass_level.dart';
+import 'scroll_chrome.dart';
 
 /// Public backend: ordinary translucent/frosted surfaces and navigation.
 /// The official source assembly supplies the same API with its own renderer.
@@ -82,17 +83,22 @@ class GlassSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final radius = borderRadius ?? BorderRadius.circular(extent.height / 2);
     final solid = !enabled || MediaQuery.highContrastOf(context);
+    // Sampling the backdrop is the expensive half of the effect and it is
+    // invisible while a bar slides, so a moving surface paints its tint flat.
+    final blurred = !solid &&
+        level != LiquidGlassLevel.low &&
+        !GlassMotionScope.movingOf(context);
     final content = ColoredBox(
       color: (fallbackTint ?? tint).withValues(alpha: solid ? 1 : .9),
       child: const SizedBox.expand(),
     );
     return ClipRRect(
       borderRadius: radius,
-      child: solid || level == LiquidGlassLevel.low
-          ? content
-          : BackdropFilter(
+      child: blurred
+          ? BackdropFilter(
               filter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-              child: content),
+              child: content)
+          : content,
     );
   }
 }

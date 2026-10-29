@@ -89,7 +89,9 @@ class GlassSurface extends StatelessWidget {
         level != LiquidGlassLevel.low &&
         !GlassMotionScope.movingOf(context);
     final content = ColoredBox(
-      color: (fallbackTint ?? tint).withValues(alpha: solid ? 1 : .9),
+      // Light enough that the blur behind it still reads as glass, opaque
+      // enough that text on top keeps its contrast.
+      color: (fallbackTint ?? tint).withValues(alpha: solid ? 1 : .75),
       child: const SizedBox.expand(),
     );
     return ClipRRect(

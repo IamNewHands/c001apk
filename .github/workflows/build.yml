@@ -157,8 +157,10 @@ jobs:
 
   android-debug:
     name: Android debug (project certificate)
-    # Pull requests skip Android signing; never expose signing Secrets to PR code.
-    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || !inputs.android_release)
+    # The signing material belongs to the upstream project and only exists
+    # there, so a fork must not queue a job that can only fail on a missing
+    # Secret. Pull requests skip Android signing for the same reason.
+    if: github.repository == 'TG-Twilight/c001apk' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || !inputs.android_release)
     needs: checks
     runs-on: ubuntu-22.04
     timeout-minutes: 35
@@ -235,7 +237,8 @@ jobs:
 
   android-release:
     name: Android signed release (three ABIs)
-    if: github.event_name == 'workflow_dispatch' && inputs.android_release
+    # Same reason as the debug job: the release certificate is upstream's.
+    if: github.repository == 'TG-Twilight/c001apk' && github.event_name == 'workflow_dispatch' && inputs.android_release
     needs: checks
     runs-on: ubuntu-22.04
     timeout-minutes: 35
@@ -402,3 +405,44 @@ jobs:
             apps/flutter/build/distribution/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
+
+  # One release entry, rewritten in place: every iOS build replaces the assets
+  # of the same `nightly` tag instead of piling up one release per run.
+  nightly:
+    name: Nightly unsigned IPA release
+    if: github.event_name == 'workflow_dispatch' && inputs.ios
+    needs: ios
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the packaged IPA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" -n c001apk-ios-arm64-unsigned -D "$RUNNER_TEMP/dist"
+      - name: Publish the single nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dist="$RUNNER_TEMP/dist"
+          ipa=$(ls "$dist"/*.ipa)
+          test -f "$ipa"
+          tag=nightly
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          title="c001apk unsigned IPA nightly (run #$GITHUB_RUN_NUMBER)"
+          notes=$(printf 'Unsigned iOS arm64 build of `%s`.\n\n- Built at: %s\n- Run: [run #%s](%s)\n- Commit: `%s`\n\n> The asset is unsigned: sign it with your own certificate and provisioning profile before installing.\n' "$GITHUB_REF_NAME" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$GITHUB_RUN_NUMBER" "$run_url" "${GITHUB_SHA:0:7}")
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$ipa" "$dist/SHA256SUMS.txt" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title" --notes "$notes"
+            # A re-uploaded asset keeps the release object's original
+            # published_at, so the page would still show the day the tag was
+            # first published. Un-drafting stamps published_at with now; the
+            # release is briefly unpublished between the two calls.
+            id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq .id)
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F draft=true >/dev/null
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$id" -F draft=false >/dev/null
+          else
+            gh release create "$tag" "$ipa" "$dist/SHA256SUMS.txt" --repo "$GITHUB_REPOSITORY" --title "$title" --notes "$notes"
+          fi

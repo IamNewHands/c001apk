@@ -254,4 +254,21 @@ void main() {
     expect(find.byType(LiquidNavigationBar), findsNothing);
     expect(find.byType(NavigationBar), findsNothing);
   });
+
+  testWidgets('navigation labels sit in the middle of the capsule',
+      (tester) async {
+    await mount(tester);
+    final surface =
+        tester.getRect(find.byKey(const ValueKey('liquid-drag-surface')));
+    final icon = tester.getRect(find.byIcon(Icons.home_outlined));
+    final label = tester.getRect(find.text('主页'));
+
+    // The row used to shrink to its content and sit at the top of the stack,
+    // which left the label block visibly high. Equal breathing room above and
+    // below is what a reader sees as centred.
+    final above = icon.top - surface.top;
+    final below = surface.bottom - label.bottom;
+    expect(above, closeTo(below, 0.5));
+    expect(above, greaterThan(4));
+  });
 }

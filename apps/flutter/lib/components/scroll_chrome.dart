@@ -40,8 +40,10 @@ class ScrollChromeController extends ChangeNotifier {
   /// threshold, so only a real scroll-up counts.
   static const double showThreshold = 72;
 
-  /// The upward travel also has to last this long before the chrome returns.
-  static const Duration showDelay = Duration(milliseconds: 250);
+  /// The upward gesture has to last this long, uninterrupted, before the chrome
+  /// returns. A short flick up to re-read one line is not a request for the
+  /// bars, and releasing the finger restarts the clock.
+  static const Duration showDelay = Duration(seconds: 1);
 
   /// The opposite direction is ignored for this long after a flip, so a flip
   /// always finishes its animation instead of being reversed mid-slide.
@@ -106,6 +108,12 @@ class ScrollChromeController extends ChangeNotifier {
     _animation.animateTo(0, duration: hideDuration, curve: Curves.easeInCubic);
   }
 
+  /// Drops a reveal that was still waiting for the gesture to last long enough.
+  ///
+  /// Called when the finger lifts or the scroll stops: the upward travel only
+  /// counts while it is continuous, so a series of short nudges never adds up.
+  void interrupt() => _reset();
+
   void show() {
     _reset();
     if (_animation.value == 1) return;
@@ -160,9 +168,8 @@ class ScrollChromeScope extends InheritedNotifier<ScrollChromeController> {
 
   final bool topFrozen, bottomFrozen;
 
-  static ScrollChromeController? maybeOf(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<ScrollChromeScope>()
-      ?.notifier;
+  static ScrollChromeController? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<ScrollChromeScope>()?.notifier;
 
   /// Effective progress for the top toolbar; 1 outside a [ScrollChromeScope].
   static double topProgressOf(BuildContext context) =>
@@ -277,6 +284,13 @@ class ScrollChromeHost extends StatefulWidget {
 class _ScrollChromeHostState extends State<ScrollChromeHost> {
   bool _onNotification(ScrollNotification notification) {
     if (!widget.enabled) return false;
+    // A gesture only counts while it is running: lifting the finger or a new
+    // gesture throws away the upward travel that had not yet earned the bars.
+    if (notification is ScrollStartNotification ||
+        notification is ScrollEndNotification) {
+      widget.controller.interrupt();
+      return false;
+    }
     if (notification is ScrollUpdateNotification) {
       final delta = notification.scrollDelta;
       // A horizontal pager must not toggle the chrome of the vertical feed.
@@ -294,7 +308,8 @@ class _ScrollChromeHostState extends State<ScrollChromeHost> {
   }
 
   @override
-  Widget build(BuildContext context) => NotificationListener<ScrollNotification>(
+  Widget build(BuildContext context) =>
+      NotificationListener<ScrollNotification>(
         onNotification: _onNotification,
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,

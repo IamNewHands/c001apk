@@ -98,8 +98,7 @@ class GlassSurface extends StatelessWidget {
       borderRadius: radius,
       child: blurred
           ? BackdropFilter(
-              filter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-              child: content)
+              filter: ui.ImageFilter.blur(sigmaX: 4, sigmaY: 4), child: content)
           : content,
     );
   }
@@ -275,49 +274,77 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                                             theme: theme,
                                             level: widget.level,
                                             shadow: false))),
-                                Row(
-                                  children: [
-                                    for (var i = 0;
-                                        i < widget.labels.length;
-                                        i++)
-                                      Expanded(
-                                          child: Semantics(
-                                              label: widget.labels[i],
-                                              excludeSemantics: true,
-                                              selected: selected == i,
-                                              button: true,
-                                              inMutuallyExclusiveGroup: true,
-                                              child: TextButton(
-                                                  onPressed: () => widget
-                                                      .onDestinationSelected(i),
-                                                  style: TextButton.styleFrom(
-                                                      padding:
-                                                          const EdgeInsets
-                                                              .symmetric(
-                                                              horizontal: 2),
-                                                      backgroundColor: selected == i
-                                                          ? theme.colorScheme
-                                                              .primaryContainer
-                                                          : Colors.transparent,
-                                                      foregroundColor: selected == i
-                                                          ? theme.colorScheme
-                                                              .onPrimaryContainer
-                                                          : theme.colorScheme
-                                                              .onSurface),
-                                                  child: widget.tabs
-                                                      ? Text(widget.labels[i],
-                                                          maxLines: 1)
-                                                      : Column(mainAxisSize: MainAxisSize.min, children: [
-                                                          Icon([
-                                                            Icons.home_outlined,
-                                                            Icons.feed_outlined,
-                                                            Icons.person_outline
-                                                          ][i % 3]),
-                                                          Text(widget.labels[i],
-                                                              maxLines: 1),
-                                                        ]))))
-                                  ],
-                                ),
+                                Positioned.fill(
+                                    // A bare stack child shrinks to its content
+                                    // and sits at the top, which is what pushed
+                                    // the icon and label above the centre of
+                                    // the capsule. The row has to own the whole
+                                    // height, and the inset keeps the selected
+                                    // pill off the capsule edge.
+                                    child: Padding(
+                                        padding: widget.tabs
+                                            ? EdgeInsets.zero
+                                            : const EdgeInsets.symmetric(
+                                                vertical: 8),
+                                        child: Row(
+                                          crossAxisAlignment: widget.tabs
+                                              ? CrossAxisAlignment.center
+                                              : CrossAxisAlignment.stretch,
+                                          children: [
+                                            for (var i = 0;
+                                                i < widget.labels.length;
+                                                i++)
+                                              Expanded(
+                                                  child: Semantics(
+                                                      label: widget.labels[i],
+                                                      excludeSemantics: true,
+                                                      selected: selected == i,
+                                                      button: true,
+                                                      inMutuallyExclusiveGroup:
+                                                          true,
+                                                      child: TextButton(
+                                                          onPressed: () => widget
+                                                              .onDestinationSelected(
+                                                                  i),
+                                                          style: TextButton.styleFrom(
+                                                              padding: const EdgeInsets.symmetric(
+                                                                  horizontal:
+                                                                      2),
+                                                              backgroundColor: selected == i
+                                                                  ? theme
+                                                                      .colorScheme
+                                                                      .primaryContainer
+                                                                  : Colors
+                                                                      .transparent,
+                                                              foregroundColor: selected == i
+                                                                  ? theme
+                                                                      .colorScheme
+                                                                      .onPrimaryContainer
+                                                                  : theme
+                                                                      .colorScheme
+                                                                      .onSurface),
+                                                          child: widget.tabs
+                                                              ? Text(widget.labels[i],
+                                                                  maxLines: 1)
+                                                              : Column(
+                                                                  mainAxisSize: MainAxisSize.min,
+                                                                  children: [
+                                                                      Icon([
+                                                                        Icons
+                                                                            .home_outlined,
+                                                                        Icons
+                                                                            .feed_outlined,
+                                                                        Icons
+                                                                            .person_outline
+                                                                      ][i % 3]),
+                                                                      Text(
+                                                                          widget.labels[
+                                                                              i],
+                                                                          maxLines:
+                                                                              1),
+                                                                    ]))))
+                                          ],
+                                        ))),
                               ])),
                         )));
               }))));

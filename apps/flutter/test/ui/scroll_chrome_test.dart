@@ -63,24 +63,40 @@ void main() {
   /// Reads the surface's current paint offset without exposing the controller.
   Rect rectOf(WidgetTester tester, Finder finder) => tester.getRect(finder);
 
-  testWidgets('the bottom bar leaves while reading down and returns on the way up',
+  /// Scrolls up with the finger still down for [hold]: the gesture a reader
+  /// makes when they really want the bars back.
+  Future<void> holdScrollUp(WidgetTester tester, Duration hold) async {
+    final gesture =
+        await tester.startGesture(tester.getCenter(find.byType(ListView)));
+    var elapsed = Duration.zero;
+    while (elapsed < hold) {
+      // Finger down scrolls the feed back up, which is the gesture that can
+      // earn the bars.
+      await gesture.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 100));
+      elapsed += const Duration(milliseconds: 100);
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets(
+      'the bottom bar leaves while reading down and returns on a held scroll-up',
       (tester) async {
     await mount(tester);
     final bar = find.byType(LiquidNavigationBar);
     final shown = rectOf(tester, bar);
 
-    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
     final hidden = rectOf(tester, bar);
     // Fully hidden means translated by exactly its own height.
     expect(hidden.top - shown.top, closeTo(shown.height, 0.5));
 
-    // A flip locks the opposite direction for 400ms; a reader takes at least
-    // that long before scrolling back up.
+    // The reveal has to be earned: one uninterrupted second of scrolling up.
     await tester.pump(const Duration(milliseconds: 200));
-    await tester.drag(find.byType(ListView), const Offset(0, 300));
-    await tester.pumpAndSettle();
+    await holdScrollUp(tester, const Duration(milliseconds: 1600));
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
@@ -89,7 +105,7 @@ void main() {
     final bar = find.byType(LiquidNavigationBar);
     final shown = rectOf(tester, bar);
 
-    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.drag(find.byType(ListView), const Offset(0, -800));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
@@ -98,12 +114,9 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
 
-    // Only an upward scroll brings them back.
-    // A flip locks the opposite direction for 400ms; a reader takes at least
-    // that long before scrolling back up.
+    // Only a sustained upward scroll brings them back.
     await tester.pump(const Duration(milliseconds: 200));
-    await tester.drag(find.byType(ListView), const Offset(0, 300));
-    await tester.pumpAndSettle();
+    await holdScrollUp(tester, const Duration(milliseconds: 1600));
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
@@ -123,7 +136,8 @@ void main() {
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
-  testWidgets('the rail stays put while the toolbar still hides', (tester) async {
+  testWidgets('the rail stays put while the toolbar still hides',
+      (tester) async {
     await mount(tester, width: 900, body: topBarPage());
     expect(find.byType(NavigationRail), findsOneWidget);
     expect(find.byType(LiquidNavigationBar), findsNothing);
@@ -142,8 +156,8 @@ void main() {
 
   testWidgets('turning auto-hide off keeps both surfaces in place',
       (tester) async {
-    await tester.runAsync(
-        () => GStorage.settings.put('scrollChromeAutoHide', false));
+    await tester
+        .runAsync(() => GStorage.settings.put('scrollChromeAutoHide', false));
     await mount(tester);
     final bar = rectOf(tester, find.byType(LiquidNavigationBar));
 
@@ -188,8 +202,9 @@ void main() {
 
   /// Hides the bar and waits out the direction lock, which is what a reader
   /// does before scrolling the other way.
-  Future<void> hideBar(WidgetTester tester, Finder bar, Rect shown) async {
-    await tester.drag(find.byType(ListView), const Offset(0, -300));
+  Future<void> hideBar(WidgetTester tester, Finder bar, Rect shown,
+      {double distance = -300}) async {
+    await tester.drag(find.byType(ListView), Offset(0, distance));
     await tester.pumpAndSettle();
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
   }
@@ -206,17 +221,42 @@ void main() {
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
   });
 
-  testWidgets('a decisive scroll-up waits out the dwell', (tester) async {
+  testWidgets('a flick up is not a request for the bars', (tester) async {
     await mount(tester);
     final bar = find.byType(LiquidNavigationBar);
     final shown = rectOf(tester, bar);
-    await hideBar(tester, bar, shown);
+    await hideBar(tester, bar, shown, distance: -800);
 
-    await tester.drag(find.byType(ListView), const Offset(0, 300));
-    await tester.pump(const Duration(milliseconds: 100));
-    // Past the threshold, but the upward motion has not lasted long enough.
+    // Far past the distance threshold, but every flick lifts the finger long
+    // before the gesture has lasted a second: the reader is re-reading one
+    // post, not asking for the chrome.
+    for (var i = 0; i < 3; i++) {
+      await tester.drag(find.byType(ListView), const Offset(0, 120));
+      await tester.pumpAndSettle();
+    }
+    expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
+  });
+
+  testWidgets('the bars wait a full second of scrolling up', (tester) async {
+    await mount(tester);
+    final bar = find.byType(LiquidNavigationBar);
+    final shown = rectOf(tester, bar);
+    await hideBar(tester, bar, shown, distance: -800);
+
+    final gesture =
+        await tester.startGesture(tester.getCenter(find.byType(ListView)));
+    for (var i = 0; i < 8; i++) {
+      await gesture.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    // 800ms of uninterrupted upward travel is still not enough.
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
 
+    for (var i = 0; i < 8; i++) {
+      await gesture.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await gesture.up();
     await tester.pumpAndSettle();
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
@@ -236,7 +276,8 @@ void main() {
     expect(find.byType(BackdropFilter), findsWidgets);
   });
 
-  testWidgets('without a scope the toolbar keeps the full inset', (tester) async {
+  testWidgets('without a scope the toolbar keeps the full inset',
+      (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 800));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(MaterialApp(

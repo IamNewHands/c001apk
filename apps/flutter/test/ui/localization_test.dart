@@ -1433,7 +1433,14 @@ void main() {
     tester.view.physicalSize = const Size(1280, 800);
     await tester.pumpAndSettle();
     expect(publish, findsNothing, reason: 'hidden state survives widening');
-    await tester.drag(scroll, const Offset(0, 180));
+    // The bars only come back after a full second of continuous scrolling up,
+    // so the gesture has to be held instead of flicked.
+    final gesture = await tester.startGesture(tester.getCenter(scroll));
+    for (var i = 0; i < 16; i++) {
+      await gesture.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await gesture.up();
     await tester.pumpAndSettle();
     expect(publish, findsOneWidget);
     expect(find.descendant(of: find.byType(NavigationRail), matching: publish),

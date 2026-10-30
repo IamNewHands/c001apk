@@ -51,7 +51,6 @@ class Reply2ReplyPage extends StatelessWidget {
               contentKeys: controller.revealedContentKeys,
               authorUids: controller.revealedAuthorUids,
               child: Column(children: [
-                ContentFilterSummary(controller: controller),
                 Expanded(
                   child: controller.loadingState.value is Success
                       ? buildBody(

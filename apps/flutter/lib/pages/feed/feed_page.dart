@@ -307,7 +307,6 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Divider(height: 1),
-            ContentFilterSummary(controller: _feedController),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(

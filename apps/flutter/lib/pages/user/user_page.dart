@@ -237,9 +237,6 @@ class _UserPageState extends State<UserPage> {
                           child:
                               _buildUserInfo(_userController.userState.value),
                         ),
-                        SliverToBoxAdapter(
-                            child: ContentFilterSummary(
-                                controller: _userController)),
                         _buildUserFeed(_userController.loadingState.value),
                       ],
                     )

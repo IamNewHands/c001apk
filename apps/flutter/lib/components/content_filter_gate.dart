@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 
 import '../logic/content_filter/app_content_filter.dart';
 import '../logic/content_filter/content_filter_projection.dart';
 import '../logic/content_filter/content_filter_rule.dart';
 import '../logic/model/feed/datum.dart';
-import '../pages/common/common_controller.dart';
 import '../utils/storage_util.dart';
 
 class ContentFilterRevealScope extends InheritedWidget {
@@ -117,52 +115,4 @@ Future<void> disableContentFilterRule(FilterMatch match) async {
   } else {
     await AppContentFilter.service?.setRuleDisabled(match.ruleId, true);
   }
-}
-
-class ContentFilterSummary extends StatelessWidget {
-  const ContentFilterSummary({super.key, required this.controller});
-  final CommonController controller;
-  @override
-  Widget build(BuildContext context) => Obx(() {
-        final count = controller.filteredItems.length;
-        if (count == 0) return const SizedBox.shrink();
-        return TextButton.icon(
-          icon: const Icon(Icons.filter_alt_outlined, size: 18),
-          label: Text('已过滤 $count 条 · 查看原因'),
-          onPressed: () => showDialog<void>(
-              context: context,
-              builder: (context) => AlertDialog(
-                    title: const Text('已过滤的内容'),
-                    content: SizedBox(
-                        width: 460,
-                        child: Obx(() => ListView(
-                              shrinkWrap: true,
-                              children: controller.filteredItems.map((item) {
-                                final hit = controller.filterMatch(item);
-                                return ListTile(
-                                    title: Text(hit?.reason ?? '规则已变化'),
-                                    subtitle: Text(
-                                        '${item.entityType == 'feed_reply' ? '评论' : '内容'} ${item.id ?? ''} · UID ${item.uid ?? ''}'),
-                                    trailing: IconButton(
-                                        tooltip: '仅本次查看',
-                                        icon: const Icon(
-                                            Icons.visibility_outlined),
-                                        onPressed: () =>
-                                            controller.revealItem(item)),
-                                    onTap: hit == null
-                                        ? null
-                                        : () async {
-                                            await disableContentFilterRule(hit);
-                                            controller.reapplyFilters();
-                                          });
-                              }).toList(),
-                            ))),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('关闭'))
-                    ],
-                  )),
-        );
-      });
 }

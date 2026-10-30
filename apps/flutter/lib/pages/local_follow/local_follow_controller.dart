@@ -111,7 +111,7 @@ class LocalFollowController extends CommonController {
         }
         if (attempt == 2) {
           automaticLoadPaused = true;
-          footerState.value = LoadingState.error('本批内容已过滤，点击继续加载');
+          footerState.value = LoadingState.error('点击继续加载');
         }
       }
     } finally {

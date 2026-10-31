@@ -360,9 +360,22 @@ jobs:
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           title="c001apk unsigned IPA nightly (run #$GITHUB_RUN_NUMBER)"
           notes=$(printf 'Unsigned iOS arm64 build of `%s`.\n\n- Built at: %s\n- Run: [run #%s](%s)\n- Commit: `%s`\n\n> The asset is unsigned: sign it with your own certificate and provisioning profile before installing.\n' "$GITHUB_REF_NAME" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$GITHUB_RUN_NUMBER" "$run_url" "${GITHUB_SHA:0:7}")
+          keep=$(basename "$ipa")
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" "$ipa" "$dist/SHA256SUMS.txt" --repo "$GITHUB_REPOSITORY" --clobber
             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "$title" --notes "$notes"
+            # The IPA name carries the version, so --clobber only ever replaces
+            # the asset of the version being rebuilt; older versions would pile
+            # up beside it. Drop every asset that is not this build's IPA or its
+            # checksum so the release keeps exactly one package.
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '.assets[] | "\(.id)\t\(.name)"' |
+              while IFS=$'\t' read -r id name; do
+                case "$name" in
+                  "$keep" | SHA256SUMS.txt) continue ;;
+                esac
+                echo "Removing stale asset: $name"
+                gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/assets/$id"
+              done
             # A re-uploaded asset keeps the release object's original
             # published_at, so the page would still show the day the tag was
             # first published. Un-drafting stamps published_at with now; the

@@ -10,32 +10,13 @@ import '../../components/mouse_drag_scroll.dart';
 import '../../components/liquid_top_bar.dart';
 import '../../components/liquid_navigation_bar.dart';
 import '../../utils/storage_util.dart';
+import '../../constants/home_tab.dart';
+import 'home_tabs_page.dart';
+export '../../constants/home_tab.dart' show TabType;
 import '../../pages/home/app/app_list_page.dart';
 import '../../pages/home/feed/home_feed_page.dart';
 import '../../pages/home/return_top_controller.dart';
 import '../../pages/home/topic/home_topic_page.dart';
-
-enum TabType {
-  FOLLOW,
-  APP,
-  FEED,
-  HOT,
-  TOPIC,
-  PRODUCT,
-  COOLPIC,
-  NONE;
-
-  String get label => switch (this) {
-        TabType.FOLLOW => '关注',
-        TabType.APP => '应用',
-        TabType.FEED => '动态',
-        TabType.HOT => '热门',
-        TabType.TOPIC => '话题',
-        TabType.PRODUCT => '数码',
-        TabType.COOLPIC => '酷图',
-        TabType.NONE => '其他',
-      };
-}
 
 class HomePage extends StatefulWidget {
   const HomePage(
@@ -59,26 +40,64 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   // late final _config = Provider.of<AppConfigProvider>(context, listen: false);
   // late bool _showFab = true; //_config.isLogin;
 
-  final _tabTypes = [
-    if (Platform.isAndroid) TabType.APP,
-    TabType.FEED,
-    TabType.HOT,
-    TabType.TOPIC,
-    TabType.PRODUCT,
-    TabType.COOLPIC,
-  ];
+  late List<TabType> _tabTypes = HomeTabConfiguration.fromStored(
+          GStorage.settings.get(HomeTabConfiguration.storageKey))
+      .visible(android: Platform.isAndroid);
 
-  List<Widget> get _pages => [
-        if (Platform.isAndroid) const AppListPage(),
-        HomeFeedPage(
-            tabType: TabType.FEED,
-            useRail: widget.useRail,
-            onPublishVisibilityChanged: widget.onPublishVisibilityChanged),
-        const HomeFeedPage(tabType: TabType.HOT),
-        const HomeTopicPage(tabType: TabType.TOPIC),
-        const HomeTopicPage(tabType: TabType.PRODUCT),
-        const HomeFeedPage(tabType: TabType.COOLPIC),
-      ];
+  // TabBarView wraps children in index-keyed semantics. Global keys preserve
+  // the existing page state when a category moves across those wrappers.
+  final _pageKeys = {
+    for (final tab in HomeTabConfiguration.defaultOrder) tab: GlobalKey(),
+  };
+
+  List<Widget> get _pages => _tabTypes
+      .map((tab) => KeyedSubtree(
+          key: _pageKeys[tab],
+          child: switch (tab) {
+            TabType.APP => const AppListPage(),
+            TabType.FEED => HomeFeedPage(
+                tabType: TabType.FEED,
+                useRail: widget.useRail,
+                onPublishVisibilityChanged: widget.onPublishVisibilityChanged),
+            TabType.HOT => const HomeFeedPage(tabType: TabType.HOT),
+            TabType.TOPIC => const HomeTopicPage(tabType: TabType.TOPIC),
+            TabType.PRODUCT => const HomeTopicPage(tabType: TabType.PRODUCT),
+            TabType.COOLPIC => const HomeFeedPage(tabType: TabType.COOLPIC),
+            _ => throw StateError('Unsupported home tab'),
+          }))
+      .toList();
+
+  void _onTabChanged() => widget.onFeedSelected
+      ?.call(_tabTypes[_tabController.index] == TabType.FEED);
+
+  Future<void> _editTabs() async {
+    final configuration = await Navigator.of(context)
+        .push<HomeTabConfiguration>(
+            MaterialPageRoute(builder: (_) => const HomeTabsPage()));
+    if (!mounted || configuration == null) return;
+    final selected = _tabTypes[_tabController.index];
+    final tabs = configuration.visible(android: Platform.isAndroid);
+    if (tabs.length == _tabTypes.length &&
+        List.generate(tabs.length, (i) => tabs[i] == _tabTypes[i])
+            .every((v) => v)) {
+      return;
+    }
+    final oldController = _tabController;
+    oldController.removeListener(_onTabChanged);
+    setState(() {
+      _tabTypes = tabs;
+      _tabController = TabController(
+        vsync: this,
+        length: tabs.length,
+        initialIndex:
+            tabs.indexOf(tabs.contains(selected) ? selected : TabType.FEED),
+      )..addListener(_onTabChanged);
+    });
+    _onTabChanged();
+    // Let TabBar and TabBarView detach their listeners before disposal.
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => oldController.dispose());
+  }
 
   void scrollToTop(int index) {
     _pageScrollController.setIndex(_tabTypes[index].index);
@@ -93,8 +112,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       initialIndex: _tabTypes.indexOf(TabType.FEED),
       length: _tabTypes.length,
     );
-    _tabController.addListener(() => widget.onFeedSelected
-        ?.call(_tabTypes[_tabController.index] == TabType.FEED));
+    _tabController.addListener(_onTabChanged);
 
     _returnTopSubscription = _pageScrollController.index.listen((index) {
       if (index == 998) {
@@ -113,9 +131,27 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return LiquidTopBarScaffold(
+      actions: [
+        IconButton(
+            onPressed: _editTabs,
+            tooltip: '编辑主页分类',
+            icon: const Icon(Icons.tune))
+      ],
+      glassActions: (_) => [
+        const SizedBox(width: 8),
+        LiquidGlassButton(
+            level: GStorage.liquidGlassLevel,
+            enabled: GStorage.liquidGlass,
+            tooltip: '编辑主页分类',
+            height: 48,
+            width: 48,
+            onPressed: _editTabs,
+            child: const Icon(Icons.tune)),
+      ],
       glassTitle: (context) => AnimatedBuilder(
         animation: _tabController,
         builder: (context, _) => LiquidNavigationBar.tabs(
+          key: ValueKey(_tabTypes.map((tab) => tab.storageId).join(',')),
           selectedIndex: _tabController.index,
           labels: _tabTypes.map((type) => type.label).toList(),
           level: GStorage.liquidGlassLevel,

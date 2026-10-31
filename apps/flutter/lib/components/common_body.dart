@@ -52,10 +52,7 @@ Widget commonBody(
                   commonController.onReset();
                   await commonController.onGetData();
                 },
-                child: Column(children: [
-                  ContentFilterSummary(controller: commonController),
-                  Expanded(child: body),
-                ]),
+                child: body,
               );
             }
             if (leading == null) return Center(child: body);

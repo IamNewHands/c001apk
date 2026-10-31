@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:c001apk_flutter/components/cards/feed_card.dart';
 import 'package:c001apk_flutter/components/cards/feed_reply_card.dart';
 import 'package:c001apk_flutter/components/common_body.dart';
-import 'package:c001apk_flutter/components/content_filter_gate.dart';
 import 'package:c001apk_flutter/logic/content_filter/app_content_filter.dart';
 import 'package:c001apk_flutter/logic/content_filter/content_filter_service.dart';
 import 'package:c001apk_flutter/logic/model/feed/datum.dart';
@@ -281,39 +280,63 @@ void main() {
         (tester) async {
       final controller = _PausedController()
         ..automaticLoadPaused = true
-        ..footerState.value = LoadingState.error('本批内容已过滤，点击继续加载')
+        ..footerState.value = LoadingState.error('点击继续加载')
         ..loadingState.value = LoadingState.success(<Datum>[]);
       await tester.pumpWidget(MaterialApp(
           home:
               Scaffold(body: commonBody(controller, isReply2Reply: replies))));
       await tester.pump();
       expect(controller.calls, 0);
-      expect(find.text('本批内容已过滤，点击继续加载'), findsOneWidget);
-      await tester.tap(find.text('本批内容已过滤，点击继续加载'));
+      expect(find.text('点击继续加载'), findsOneWidget);
+      await tester.tap(find.text('点击继续加载'));
       await tester.pump();
       expect(controller.calls, 1);
       controller.onClose();
     });
   }
 
-  testWidgets(
-      'summary reveal reaches the card gate without persisting an exception',
-      (tester) async {
-    final controller = _PausedController()..isEnd = true;
-    controller.publishItems(
-        [Datum(entityType: 'feed', id: 7, uid: 1007278, message: '本次恢复内容')]);
-    await tester
-        .pumpWidget(MaterialApp(home: Scaffold(body: commonBody(controller))));
-    await tester.pump();
-    expect(find.byType(ContentFilterSummary), findsOneWidget);
-    await tester.tap(find.text('已过滤 1 条 · 查看原因'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('仅本次查看'));
-    await tester.pump();
-    await tester.tap(find.text('关闭'));
-    await tester.pumpAndSettle();
-    expect(visibleText('本次恢复内容'), findsWidgets);
-    expect(AppContentFilter.service!.allowedContentKeys, isEmpty);
-    controller.onClose();
-  });
+  for (final width in [393.0, 1280.0]) {
+    testWidgets(
+        'list silently filters and restores cached rows at width $width',
+        (tester) async {
+      tester.view.physicalSize = Size(width, 873);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final controller = _PausedController()
+        ..isEnd = true
+        ..scrollController = ScrollController();
+      controller.publishItems([
+        Datum(entityType: 'feed', id: 7, uid: 1007278, message: '应静默隐藏'),
+        Datum(entityType: 'feed', id: 8, uid: 7, message: '正常内容仍可见'),
+      ]);
+      await tester.pumpWidget(MaterialApp(
+          home: MediaQuery(
+              data: MediaQueryData(
+                  size: Size(width, 873),
+                  padding: const EdgeInsets.only(top: 40)),
+              child: Scaffold(
+                  body: commonBody(controller,
+                      itemBuilder: (item) => Text(item.message!))))));
+      await tester.pumpAndSettle();
+      expect(controller.filteredItems, hasLength(1));
+      expect(find.text('应静默隐藏'), findsNothing);
+      expect(find.text('正常内容仍可见'), findsOneWidget);
+      expect(find.textContaining('已过滤'), findsNothing);
+      expect(find.textContaining('查看原因'), findsNothing);
+      expect(find.byIcon(Icons.filter_alt_outlined), findsNothing);
+      expect(find.byType(TextButton), findsNothing);
+      final scroll = controller.scrollController;
+      expect(scroll!.hasClients, isTrue);
+      await tester.runAsync(() => AppContentFilter.service!.setEnabled(false));
+      await tester.pumpAndSettle();
+      expect(find.text('应静默隐藏'), findsOneWidget);
+      expect(identical(controller.scrollController, scroll), isTrue);
+      expect(controller.calls, 0);
+      expect(AppContentFilter.service!.allowedContentKeys, isEmpty);
+      await tester.pumpWidget(const SizedBox.shrink());
+      scroll.dispose();
+      controller.onClose();
+    });
+  }
 }

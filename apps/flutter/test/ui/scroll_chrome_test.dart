@@ -115,7 +115,8 @@ void main() {
     // Fully hidden means translated by exactly its own height.
     expect(hidden.top - shown.top, closeTo(shown.height, 0.5));
 
-    // The reveal has to be earned: 1.5s of uninterrupted scrolling up.
+    // The reveal has to be earned: a full second of uninterrupted scrolling
+    // up, with the finger still on the screen.
     await tester.pump(const Duration(milliseconds: 200));
     await holdScrollUp(tester, const Duration(milliseconds: 2400));
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
@@ -141,7 +142,7 @@ void main() {
     expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
   });
 
-  testWidgets('a tap on the content brings the chrome back', (tester) async {
+  testWidgets('a tap on the content leaves the chrome hidden', (tester) async {
     await mount(tester);
     final bar = find.byType(LiquidNavigationBar);
     final shown = rectOf(tester, bar);
@@ -151,10 +152,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 250));
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
 
-    // Tapping still reaches the content, so cards stay openable.
+    // Tapping a card is how the reader opens it, not a request for the bars:
+    // the tap still reaches the content, and the chrome stays away.
     await tester.tapAt(const Offset(200, 400));
     await tester.pumpAndSettle();
-    expect(rectOf(tester, bar).top, closeTo(shown.top, 0.5));
+    expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
   });
 
   testWidgets('the rail stays put while the toolbar still hides',
@@ -258,7 +260,7 @@ void main() {
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
   });
 
-  testWidgets('the bars wait two seconds of scrolling up', (tester) async {
+  testWidgets('the bars wait a full second of scrolling up', (tester) async {
     await mount(tester);
     final bar = find.byType(LiquidNavigationBar);
     final shown = rectOf(tester, bar);
@@ -266,14 +268,14 @@ void main() {
 
     final gesture =
         await tester.startGesture(tester.getCenter(find.byType(ListView)));
-    for (var i = 0; i < 15; i++) {
+    for (var i = 0; i < 9; i++) {
       await gesture.moveBy(const Offset(0, 20));
       await tester.pump(const Duration(milliseconds: 100));
     }
-    // 1.5s of uninterrupted upward travel is still not enough.
+    // 0.9s of uninterrupted upward travel is still not enough.
     expect(rectOf(tester, bar).top, greaterThan(shown.top + 1));
 
-    for (var i = 0; i < 12; i++) {
+    for (var i = 0; i < 3; i++) {
       await gesture.moveBy(const Offset(0, 20));
       await tester.pump(const Duration(milliseconds: 100));
     }
@@ -346,14 +348,16 @@ void main() {
     expect(padding(), reserved);
     final itemTop = rectOf(tester, item).top;
 
-    await tester.tapAt(const Offset(200, 400));
-    await tester.pumpAndSettle();
+    // A held scroll-up is the only way back now; a tap must not do it. The
+    // finger drags the feed back down by its own travel (12 moves of 20), and
+    // that is the only movement the content is allowed to make.
+    await holdScrollUp(tester, const Duration(milliseconds: 1200));
     expect(rectOf(tester, appBar).top, closeTo(0, 0.5));
     expect(rectOf(tester, bar).top, closeTo(shownBar.top, 0.5));
     // Docking must not take it away again: either one moves the content the
     // reader is looking at.
     expect(padding(), reserved);
-    expect(rectOf(tester, item).top, closeTo(itemTop, 0.5));
+    expect(rectOf(tester, item).top, closeTo(itemTop + 240, 0.5));
   });
 
   testWidgets('only a bar that is leaving drops the backdrop blur',
@@ -372,11 +376,16 @@ void main() {
     expect(find.byType(BackdropFilter), findsNothing);
 
     // Arriving, the blur is on from the first frame, so docking does not pop
-    // the surface in the last one.
-    await tester.tapAt(const Offset(200, 400));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 120));
+    // the surface in the last one. The finger is still down here, so this is
+    // the middle of the slide, not the docked state.
+    final gesture =
+        await tester.startGesture(tester.getCenter(find.byType(ListView)));
+    for (var i = 0; i < 14; i++) {
+      await gesture.moveBy(const Offset(0, 20));
+      await tester.pump(const Duration(milliseconds: 100));
+    }
     expect(find.byType(BackdropFilter), findsWidgets);
+    await gesture.up();
     await tester.pumpAndSettle();
     expect(find.byType(BackdropFilter), findsWidgets);
   });

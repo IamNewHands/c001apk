@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-/// Hides the main chrome while the user scrolls down and restores it on a
-/// deliberate scroll-up, on a tap, or on a return to the top of the feed.
+/// Hides the main chrome while the user scrolls down and restores it only on a
+/// held scroll-up.
 ///
 /// Resting the scroll never brings the chrome back: a reader who stops to look
-/// at a card keeps the whole screen, and the bars only return on an explicit
-/// gesture.
+/// at a card keeps the whole screen, and a tap does not bring it back either —
+/// tapping a card is how the reader opens it, not a request for the bars.
 ///
 /// The thresholds are asymmetric and the directions are locked after a flip, so
 /// nudging a long post up and down cannot make the bars flicker in and out: a
@@ -44,7 +44,7 @@ class ScrollChromeController extends ChangeNotifier {
   /// interruption, before the chrome returns. A short flick up to re-read one
   /// line is not a request for the bars, and neither is the momentum that
   /// carries the feed on after the finger leaves.
-  static const Duration showDelay = Duration(seconds: 2);
+  static const Duration showDelay = Duration(seconds: 1);
 
   /// The opposite direction is ignored for this long after a flip, so a flip
   /// always finishes its animation instead of being reversed mid-slide.
@@ -321,43 +321,12 @@ class ScrollChromeHost extends StatefulWidget {
 }
 
 class _ScrollChromeHostState extends State<ScrollChromeHost> {
-  /// A finger that wandered further than this was dragging the feed, not
-  /// tapping it.
-  static const double _tapSlop = 16;
+  void _handleDown(PointerDownEvent event) => widget.controller.pointerDown();
 
-  Offset? _downAt;
-  bool _wandered = false;
+  void _handleMove(PointerMoveEvent event) =>
+      widget.controller.pointerMoved(event.delta.dy);
 
-  void _handleDown(PointerDownEvent event) {
-    _downAt = event.position;
-    _wandered = false;
-    widget.controller.pointerDown();
-  }
-
-  void _handleMove(PointerMoveEvent event) {
-    final down = _downAt;
-    if (down != null && (event.position - down).distance > _tapSlop) {
-      _wandered = true;
-    }
-    widget.controller.pointerMoved(event.delta.dy);
-  }
-
-  void _handleUp(PointerEvent event) {
-    final down = _downAt;
-    _downAt = null;
-    widget.controller.pointerUp();
-    // A tap, and only a tap, is the manual way back to a full bar. It is
-    // detected here rather than with a [GestureDetector] because a gesture
-    // recognizer on this level competes in the arena with every card and
-    // button below it, and a raw pointer never does.
-    final wandered = _wandered;
-    _wandered = false;
-    if (down != null &&
-        !wandered &&
-        (event.position - down).distance <= _tapSlop) {
-      widget.controller.show();
-    }
-  }
+  void _handleUp(PointerEvent event) => widget.controller.pointerUp();
 
   bool _onNotification(ScrollNotification notification) {
     if (!widget.enabled) return false;

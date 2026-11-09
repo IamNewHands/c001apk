@@ -162,16 +162,18 @@ void main() {
   testWidgets('the rail stays put while the toolbar still hides',
       (tester) async {
     await mount(tester, width: 900, body: topBarPage());
-    expect(find.byType(NavigationRail), findsOneWidget);
-    expect(find.byType(LiquidNavigationBar), findsNothing);
-    final rail = rectOf(tester, find.byType(NavigationRail));
+    final navigation = find.byType(LiquidNavigationBar);
+    expect(navigation, findsOneWidget);
+    expect(tester.widget<LiquidNavigationBar>(navigation).direction,
+        Axis.vertical);
+    final rail = rectOf(tester, navigation);
     final appBar = rectOf(tester, find.byType(AppBar));
 
     await tester.drag(find.byType(ListView), const Offset(0, -300));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
 
-    expect(rectOf(tester, find.byType(NavigationRail)), rail);
+    expect(rectOf(tester, navigation), rail);
     expect(appBar.top - rectOf(tester, find.byType(AppBar)).top,
         closeTo(appBar.height, 0.5));
     await tester.pumpAndSettle();

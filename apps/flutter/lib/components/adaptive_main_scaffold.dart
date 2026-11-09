@@ -128,37 +128,71 @@ class _AdaptiveMainScaffoldState extends State<AdaptiveMainScaffold>
                         bottom: false,
                         child: Row(children: [
                           SizedBox(
-                            width: useRail ? 80 : 0,
+                            width: useRail ? 144 : 0,
                             child: Offstage(
                               offstage: !useRail,
-                              child: NavigationRail(
-                                trailingAtBottom: true,
-                                trailing: widget.railTrailing == null
-                                    ? null
-                                    : Padding(
-                                        padding:
-                                            const EdgeInsets.only(bottom: 16),
-                                        child: widget.railTrailing,
-                                      ),
-                                selectedIndex: widget.selectedIndex,
-                                onDestinationSelected:
-                                    widget.onDestinationSelected,
-                                labelType: NavigationRailLabelType.all,
-                                destinations: const [
-                                  NavigationRailDestination(
-                                      icon: Icon(Icons.home_outlined),
-                                      selectedIcon: Icon(Icons.home),
-                                      label: Text('主页')),
-                                  NavigationRailDestination(
-                                      icon: Icon(Icons.feed_outlined),
-                                      selectedIcon: Icon(Icons.feed),
-                                      label: Text('关注')),
-                                  NavigationRailDestination(
-                                      icon: Icon(Icons.person_outline),
-                                      selectedIcon: Icon(Icons.person),
-                                      label: Text('我的')),
-                                ],
-                              ),
+                              child: !useRail
+                                  ? const SizedBox.shrink()
+                                  : Stack(
+                                      children: [
+                                        Positioned.fill(
+                                          child: Center(
+                                            child: floating
+                                                ? LiquidNavigationBar(
+                                                    direction: Axis.vertical,
+                                                    selectedIndex:
+                                                        widget.selectedIndex,
+                                                    onDestinationSelected: widget
+                                                        .onDestinationSelected,
+                                                    refract:
+                                                        GStorage.liquidGlass,
+                                                    level: GStorage
+                                                        .liquidGlassLevel,
+                                                  )
+                                                : NavigationRail(
+                                                    groupAlignment: 0,
+                                                    extended: true,
+                                                    minExtendedWidth: 144,
+                                                    selectedIndex:
+                                                        widget.selectedIndex,
+                                                    onDestinationSelected: widget
+                                                        .onDestinationSelected,
+                                                    labelType:
+                                                        NavigationRailLabelType
+                                                            .none,
+                                                    destinations: const [
+                                                      NavigationRailDestination(
+                                                          icon: Icon(Icons
+                                                              .home_outlined),
+                                                          selectedIcon:
+                                                              Icon(Icons.home),
+                                                          label: Text('主页')),
+                                                      NavigationRailDestination(
+                                                          icon: Icon(Icons
+                                                              .feed_outlined),
+                                                          selectedIcon:
+                                                              Icon(Icons.feed),
+                                                          label: Text('关注')),
+                                                      NavigationRailDestination(
+                                                          icon: Icon(Icons
+                                                              .person_outline),
+                                                          selectedIcon: Icon(
+                                                              Icons.person),
+                                                          label: Text('我的')),
+                                                    ],
+                                                  ),
+                                          ),
+                                        ),
+                                        if (widget.railTrailing != null)
+                                          Positioned(
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 16,
+                                            child: Center(
+                                                child: widget.railTrailing),
+                                          ),
+                                      ],
+                                    ),
                             ),
                           ),
                           Expanded(child: widget.bodyBuilder(context, useRail)),

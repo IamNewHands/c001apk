@@ -98,7 +98,7 @@ class _MainPageState extends State<MainPage>
               onDestinationSelected: onDestinationSelected,
               bodyBuilder: (context, useRail) => FeedReadingPane(
                 paneKey: _readingKey,
-                leadingInset: useRail ? 80 : 0,
+                leadingInset: useRail ? 144 : 0,
                 child: PageView(
                   physics: const NeverScrollableScrollPhysics(),
                   controller: _contrller,

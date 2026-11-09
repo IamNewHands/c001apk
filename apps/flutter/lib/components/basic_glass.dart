@@ -34,6 +34,7 @@ class GlassSurface extends StatelessWidget {
     required Size extent,
     required ThemeData theme,
     required LiquidGlassLevel level,
+    BorderRadius? borderRadius,
     bool shadow = true,
     double press = 0,
   }) =>
@@ -45,6 +46,7 @@ class GlassSurface extends StatelessWidget {
           dispersion: 0,
           tint: theme.colorScheme.surfaceContainer,
           level: level,
+          borderRadius: borderRadius,
           shadow: shadow,
           press: press);
 
@@ -187,6 +189,7 @@ class LiquidNavigationBar extends StatefulWidget {
       required this.onDestinationSelected,
       this.program,
       this.refract = true,
+      this.direction = Axis.horizontal,
       this.level = LiquidGlassLevel.medium})
       : labels = const ['主页', '关注', '我的'],
         tabs = false;
@@ -197,12 +200,14 @@ class LiquidNavigationBar extends StatefulWidget {
       required this.labels,
       this.program,
       this.refract = true,
+      this.direction = Axis.horizontal,
       this.level = LiquidGlassLevel.medium})
       : tabs = true;
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
   final ui.FragmentProgram? program;
   final bool refract, tabs;
+  final Axis direction;
   final LiquidGlassLevel level;
   final List<String> labels;
 
@@ -212,19 +217,22 @@ class LiquidNavigationBar extends StatefulWidget {
 
 class _BasicNavigationState extends State<LiquidNavigationBar> {
   int? _dragIndex;
+  bool get _vertical => widget.direction == Axis.vertical;
 
   @override
   Widget build(BuildContext context) => SafeArea(
       top: false,
-      bottom: !widget.tabs,
-      minimum: widget.tabs
+      bottom: !widget.tabs && !_vertical,
+      minimum: widget.tabs || _vertical
           ? EdgeInsets.zero
           : const EdgeInsets.fromLTRB(20, 14, 20, 12),
       child: Center(
           heightFactor: 1,
           child: ConstrainedBox(
-              constraints:
-                  BoxConstraints(maxWidth: widget.tabs ? double.infinity : 248),
+              constraints: _vertical
+                  ? const BoxConstraints(maxHeight: 176, maxWidth: 128)
+                  : BoxConstraints(
+                      maxWidth: widget.tabs ? double.infinity : 248),
               child: LayoutBuilder(builder: (context, bounds) {
                 if (widget.labels.isEmpty || bounds.maxWidth <= 0) {
                   return const SizedBox.shrink();
@@ -234,117 +242,147 @@ class _BasicNavigationState extends State<LiquidNavigationBar> {
                 final height = widget.tabs
                     ? math.max(48.0, textHeight + 24)
                     : math.max(64.0, textHeight + 40);
+                final length = _vertical ? bounds.maxHeight : bounds.maxWidth;
                 final selected = (_dragIndex ?? widget.selectedIndex)
                     .clamp(0, widget.labels.length - 1);
                 void drag(Offset point) => setState(() => _dragIndex =
-                    (point.dx / bounds.maxWidth * widget.labels.length)
+                    ((_vertical ? point.dy : point.dx) /
+                            length *
+                            widget.labels.length)
                         .floor()
                         .clamp(0, widget.labels.length - 1));
                 return _BasicRoundHitRegion(
                     child: ClipRRect(
-                        borderRadius: BorderRadius.circular(height / 2),
+                        borderRadius:
+                            BorderRadius.circular(_vertical ? 28 : height / 2),
                         child: GestureDetector(
                           key: ValueKey(widget.tabs
                               ? 'liquid-tabs-surface'
                               : 'liquid-drag-surface'),
                           behavior: HitTestBehavior.opaque,
-                          onHorizontalDragStart: (event) =>
-                              drag(event.localPosition),
-                          onHorizontalDragUpdate: (event) =>
-                              drag(event.localPosition),
-                          onHorizontalDragCancel: () =>
-                              setState(() => _dragIndex = null),
-                          onHorizontalDragEnd: (_) {
-                            final index = _dragIndex;
-                            setState(() => _dragIndex = null);
-                            if (index != null) {
-                              widget.onDestinationSelected(index);
-                            }
-                          },
+                          onHorizontalDragStart: _vertical
+                              ? null
+                              : (event) => drag(event.localPosition),
+                          onHorizontalDragUpdate: _vertical
+                              ? null
+                              : (event) => drag(event.localPosition),
+                          onHorizontalDragCancel: _vertical
+                              ? null
+                              : () => setState(() => _dragIndex = null),
+                          onHorizontalDragEnd: _vertical
+                              ? null
+                              : (_) {
+                                  final index = _dragIndex;
+                                  setState(() => _dragIndex = null);
+                                  if (index != null) {
+                                    widget.onDestinationSelected(index);
+                                  }
+                                },
+                          onVerticalDragStart: !_vertical
+                              ? null
+                              : (event) => drag(event.localPosition),
+                          onVerticalDragUpdate: !_vertical
+                              ? null
+                              : (event) => drag(event.localPosition),
+                          onVerticalDragCancel: !_vertical
+                              ? null
+                              : () => setState(() => _dragIndex = null),
+                          onVerticalDragEnd: !_vertical
+                              ? null
+                              : (_) {
+                                  final index = _dragIndex;
+                                  setState(() => _dragIndex = null);
+                                  if (index != null) {
+                                    widget.onDestinationSelected(index);
+                                  }
+                                },
                           child: SizedBox(
-                              height: height,
+                              height: _vertical ? length : height,
                               child: Stack(children: [
                                 Positioned.fill(
                                     child: IgnorePointer(
                                         child: GlassSurface.navigationBase(
                                             shader: null,
+                                            borderRadius: _vertical
+                                                ? BorderRadius.circular(28)
+                                                : null,
                                             enabled: widget.refract,
-                                            extent:
-                                                Size(bounds.maxWidth, height),
+                                            extent: _vertical
+                                                ? Size(bounds.maxWidth, length)
+                                                : Size(bounds.maxWidth, height),
                                             theme: theme,
                                             level: widget.level,
                                             shadow: false))),
                                 Positioned.fill(
-                                    // A bare stack child shrinks to its content
-                                    // and sits at the top, which is what pushed
-                                    // the icon and label above the centre of
-                                    // the capsule. The row has to own the whole
-                                    // height, and the inset keeps the selected
-                                    // pill off the capsule edge.
-                                    child: Padding(
-                                        padding: widget.tabs
-                                            ? EdgeInsets.zero
-                                            : const EdgeInsets.symmetric(
-                                                vertical: 8),
-                                        child: Row(
-                                          crossAxisAlignment: widget.tabs
-                                              ? CrossAxisAlignment.center
-                                              : CrossAxisAlignment.stretch,
-                                          children: [
-                                            for (var i = 0;
-                                                i < widget.labels.length;
-                                                i++)
-                                              Expanded(
-                                                  child: Semantics(
-                                                      label: widget.labels[i],
-                                                      excludeSemantics: true,
-                                                      selected: selected == i,
-                                                      button: true,
-                                                      inMutuallyExclusiveGroup:
-                                                          true,
-                                                      child: TextButton(
-                                                          onPressed: () => widget
-                                                              .onDestinationSelected(
-                                                                  i),
-                                                          style: TextButton.styleFrom(
-                                                              padding: const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                      2),
-                                                              backgroundColor: selected == i
-                                                                  ? theme
-                                                                      .colorScheme
-                                                                      .primaryContainer
-                                                                  : Colors
-                                                                      .transparent,
-                                                              foregroundColor: selected == i
-                                                                  ? theme
-                                                                      .colorScheme
-                                                                      .onPrimaryContainer
-                                                                  : theme
-                                                                      .colorScheme
-                                                                      .onSurface),
-                                                          child: widget.tabs
-                                                              ? Text(widget.labels[i],
-                                                                  maxLines: 1)
-                                                              : Column(
-                                                                  mainAxisSize: MainAxisSize.min,
-                                                                  children: [
-                                                                      Icon([
-                                                                        Icons
-                                                                            .home_outlined,
-                                                                        Icons
-                                                                            .feed_outlined,
-                                                                        Icons
-                                                                            .person_outline
-                                                                      ][i % 3]),
-                                                                      Text(
-                                                                          widget.labels[
-                                                                              i],
-                                                                          maxLines:
-                                                                              1),
-                                                                    ]))))
-                                          ],
-                                        ))),
+                                  // Keep the icon/label group centered within
+                                  // the full capsule in either orientation.
+                                  child: Padding(
+                                    padding: widget.tabs
+                                        ? EdgeInsets.zero
+                                        : const EdgeInsets.symmetric(
+                                            vertical: 8),
+                                    child: Flex(
+                                      direction: widget.direction,
+                                      crossAxisAlignment: widget.tabs
+                                          ? CrossAxisAlignment.center
+                                          : CrossAxisAlignment.stretch,
+                                      children: [
+                                        for (var i = 0;
+                                            i < widget.labels.length;
+                                            i++)
+                                          Expanded(
+                                            child: Semantics(
+                                              label: widget.labels[i],
+                                              excludeSemantics: true,
+                                              selected: selected == i,
+                                              button: true,
+                                              inMutuallyExclusiveGroup: true,
+                                              child: TextButton(
+                                                onPressed: () => widget
+                                                    .onDestinationSelected(i),
+                                                style: TextButton.styleFrom(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(horizontal: 2),
+                                                  backgroundColor: selected == i
+                                                      ? theme.colorScheme
+                                                          .primaryContainer
+                                                      : Colors.transparent,
+                                                  foregroundColor: selected == i
+                                                      ? theme.colorScheme
+                                                          .onPrimaryContainer
+                                                      : theme.colorScheme
+                                                          .onSurface,
+                                                ),
+                                                child: widget.tabs
+                                                    ? Text(widget.labels[i],
+                                                        maxLines: 1)
+                                                    : Flex(
+                                                        direction: _vertical
+                                                            ? Axis.horizontal
+                                                            : Axis.vertical,
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          Icon([
+                                                            Icons.home_outlined,
+                                                            Icons.feed_outlined,
+                                                            Icons
+                                                                .person_outline,
+                                                          ][i % 3]),
+                                                          if (_vertical)
+                                                            const SizedBox(
+                                                                width: 10),
+                                                          Text(widget.labels[i],
+                                                              maxLines: 1),
+                                                        ],
+                                                      ),
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ])),
                         )));
               }))));
@@ -359,8 +397,8 @@ class _BasicRoundHitRegion extends SingleChildRenderObjectWidget {
 class _BasicRoundHitBox extends RenderProxyBox {
   @override
   bool hitTest(BoxHitTestResult result, {required Offset position}) =>
-      RRect.fromRectAndRadius(
-              Offset.zero & size, Radius.circular(size.height / 2))
+      RRect.fromRectAndRadius(Offset.zero & size,
+              Radius.circular(size.height > size.width ? 28 : size.height / 2))
           .contains(position) &&
       super.hitTest(result, position: position);
 }

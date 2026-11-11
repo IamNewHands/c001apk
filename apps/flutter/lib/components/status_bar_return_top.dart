@@ -1,15 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 /// Routes a tap on the iOS status bar strip (the Dynamic Island) to the
 /// scrolling page the user is looking at.
 ///
-/// iOS delivers that gesture to the system instead of the Flutter view, so the
-/// native side claims it with a hidden `scrollsToTop` scroll view and forwards
-/// it over [channel]. Every other platform, and any tap the system does hand
-/// over, arrives through [StatusBarTapDetector].
+/// On iOS, the native embedder catches taps on the status bar and Dynamic
+/// Island through UIKit's `scrollsToTop` mechanism, which Flutter exposes via
+/// [WidgetsBindingObserver.handleStatusBarTap]. On other platforms, or when a
+/// tap lands directly on the safe-area strip, [StatusBarTapDetector] catches it.
 ///
 /// This deliberately never asks the scroll chrome to come back: `scroll_chrome`
 /// documents that a tap must not restore the toolbars, only a sustained upward
@@ -17,12 +16,10 @@ import 'package:flutter/services.dart';
 class StatusBarReturnTop {
   StatusBarReturnTop._();
 
-  static const MethodChannel channel =
-      MethodChannel('app.awavenue.c001apk/status_bar');
-
   static final List<_StatusBarBinding> _bindings = [];
-
   static bool _installed = false;
+  static DateTime _lastDispatch = DateTime.fromMillisecondsSinceEpoch(0);
+  static final _StatusBarObserver _observer = _StatusBarObserver();
 
   /// Registers [onTap] for [owner], replacing any previous registration.
   ///
@@ -34,6 +31,7 @@ class StatusBarReturnTop {
     VoidCallback onTap, {
     bool Function()? isActive,
   }) {
+    install();
     unbind(owner);
     _bindings.add(_StatusBarBinding(owner, onTap, isActive));
   }
@@ -47,6 +45,12 @@ class StatusBarReturnTop {
   /// Newest wins because pages stay mounted behind the visible one, and the
   /// most recently opened page is the one on screen.
   static void dispatch() {
+    final now = DateTime.now();
+    if (now.difference(_lastDispatch) < const Duration(milliseconds: 300)) {
+      return;
+    }
+    _lastDispatch = now;
+
     for (var index = _bindings.length - 1; index >= 0; index--) {
       final binding = _bindings[index];
       if (binding.isActive?.call() == false) continue;
@@ -55,19 +59,24 @@ class StatusBarReturnTop {
     }
   }
 
-  /// Hooks the native status bar tap bridge. Safe to call more than once.
+  /// Hooks the status bar tap observer. Safe to call more than once.
   static void install() {
-    if (_installed || !Platform.isIOS) return;
+    if (_installed) return;
     _installed = true;
-    channel.setMethodCallHandler((call) async {
-      if (call.method == 'returnToTop') dispatch();
-      return null;
-    });
+    WidgetsBinding.instance.addObserver(_observer);
   }
 
   @visibleForTesting
   static void clear() {
     _bindings.clear();
+    _lastDispatch = DateTime.fromMillisecondsSinceEpoch(0);
+  }
+}
+
+class _StatusBarObserver with WidgetsBindingObserver {
+  @override
+  void handleStatusBarTap() {
+    StatusBarReturnTop.dispatch();
   }
 }
 
@@ -100,17 +109,13 @@ mixin StatusBarReturnTopBinding<T extends StatefulWidget> on State<T> {
       this,
       onStatusBarReturnTop,
       // Kept pages stay mounted, so the binding has to answer "am I the one on
-      // screen" at tap time. The route covers pushed pages; the nearest
-      // TickerMode and Offstage cover what the reading pane parks instead of
-      // disposing, since it hides inactive panes that way.
+      // screen" at tap time. The route covers pushed pages; TickerMode and
+      // Offstage cover what the reading pane parks instead of disposing,
+      // since it hides inactive panes that way.
       isActive: () {
         if (!mounted || !(route?.isCurrent ?? true)) return false;
-        if (context.findAncestorWidgetOfExactType<Offstage>()?.offstage ??
-            false) {
-          return false;
-        }
-        return context.findAncestorWidgetOfExactType<TickerMode>()?.enabled ??
-            true;
+        if (_isAncestorOffstage(context)) return false;
+        return TickerMode.of(context);
       },
     );
   }
@@ -122,13 +127,24 @@ mixin StatusBarReturnTopBinding<T extends StatefulWidget> on State<T> {
   }
 }
 
+bool _isAncestorOffstage(BuildContext context) {
+  var offstage = false;
+  context.visitAncestorElements((element) {
+    if (element.widget is Offstage && (element.widget as Offstage).offstage) {
+      offstage = true;
+      return false;
+    }
+    return true;
+  });
+  return offstage;
+}
+
 /// Transparent hit target over the status bar strip.
 ///
 /// Drop it as the last child of the root [Stack] so it covers every route.
 ///
-/// Only iOS needs it: the status bar tap is an iOS gesture, and on Android the
-/// inset is ordinary app content that must keep receiving taps. [enabled]
-/// overrides that platform check so widget tests can drive the strip.
+/// Handles tap events delivered directly inside the application bounds over
+/// the top safe area. [enabled] overrides the platform check for tests.
 class StatusBarTapDetector extends StatefulWidget {
   const StatusBarTapDetector({super.key, this.enabled});
 
@@ -148,7 +164,7 @@ class _StatusBarTapDetectorState extends State<StatusBarTapDetector> {
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
-    final enabled = widget.enabled ?? Platform.isIOS;
+    final enabled = widget.enabled ?? (Platform.isAndroid || Platform.isIOS);
     return Positioned(
       top: 0,
       left: 0,

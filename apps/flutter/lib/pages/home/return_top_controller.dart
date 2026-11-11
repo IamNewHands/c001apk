@@ -5,5 +5,6 @@ class ReturnTopController extends GetxController {
 
   void setIndex(int index) {
     this.index.value = index;
+    this.index.refresh();
   }
 }

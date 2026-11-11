@@ -1,5 +1,6 @@
 import 'package:c001apk_flutter/components/status_bar_return_top.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -110,6 +111,21 @@ void main() {
     await tester.pumpWidget(app());
     await tester.tap(strip());
     await tester.pump();
+    expect(taps, 1);
+  });
+
+  testWidgets('iOS status bar tap via WidgetsBindingObserver triggers dispatch',
+      (tester) async {
+    StatusBarReturnTop.install();
+    var taps = 0;
+    StatusBarReturnTop.bind('page', () => taps++);
+
+    final ByteData? message = const StandardMethodCodec()
+        .encodeMethodCall(const MethodCall('handleScrollToTop'));
+    await tester.binding.defaultBinaryMessenger
+        .handlePlatformMessage('flutter/statusbar', message, (_) {});
+    await tester.pump();
+
     expect(taps, 1);
   });
 }

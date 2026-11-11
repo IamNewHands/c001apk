@@ -120,10 +120,14 @@ void main() {
     var taps = 0;
     StatusBarReturnTop.bind('page', () => taps++);
 
-    final ByteData? message = const StandardMethodCodec()
-        .encodeMethodCall(const MethodCall('handleScrollToTop'));
-    await tester.binding.defaultBinaryMessenger
-        .handlePlatformMessage('flutter/statusbar', message, (_) {});
+    final ByteData message = const JSONMethodCodec().encodeMethodCall(
+      const MethodCall('handleScrollToTop'),
+    );
+    await tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      SystemChannels.statusBar.name,
+      message,
+      (_) {},
+    );
     await tester.pump();
 
     expect(taps, 1);

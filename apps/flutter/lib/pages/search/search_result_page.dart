@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../pages/home/return_top_controller.dart';
+import '../../components/status_bar_return_top.dart';
 import '../../pages/search/search_order_controller.dart';
 import '../../pages/search/search_result_content.dart';
 import '../../utils/device_util.dart';
@@ -87,7 +88,7 @@ class SearchResultPage extends StatefulWidget {
 }
 
 class _SearchResultPageState extends State<SearchResultPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, StatusBarReturnTopBinding<SearchResultPage> {
   final String _keyword = Get.parameters['keyword'] ?? '';
   final String? _title = Get.parameters['title'];
   final String? _pageType = Get.parameters['pageType'];
@@ -132,6 +133,10 @@ class _SearchResultPageState extends State<SearchResultPage>
     );
     super.dispose();
   }
+
+  @override
+  void onStatusBarReturnTop() =>
+      _pageScrollController.setIndex(_tabController.index);
 
   @override
   Widget build(BuildContext context) {

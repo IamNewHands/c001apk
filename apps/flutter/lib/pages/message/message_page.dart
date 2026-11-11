@@ -17,7 +17,11 @@ import '../../logic/announcements/app_announcements.dart';
 import '../../utils/storage_util.dart';
 
 class MessagePage extends StatefulWidget {
-  const MessagePage({super.key});
+  const MessagePage({super.key, this.scrollController});
+
+  /// Owned by [MainPage] so the status bar tap can scroll this page back to
+  /// the top; falls back to an internal controller when absent.
+  final ScrollController? scrollController;
 
   @override
   State<MessagePage> createState() => _MessagePageState();
@@ -38,8 +42,14 @@ class _MessagePageState extends State<MessagePage>
   late final MessageController _messageController =
       Get.put(MessageController());
 
+  ScrollController? _ownScrollController;
+  ScrollController get _scrollController =>
+      widget.scrollController ??
+      (_ownScrollController ??= ScrollController());
+
   @override
   void dispose() {
+    _ownScrollController?.dispose();
     Get.delete<MessageController>();
     super.dispose();
   }
@@ -193,6 +203,7 @@ class _MessagePageState extends State<MessagePage>
                     }
                   },
                   child: CustomScrollView(
+                    controller: _scrollController,
                     physics: const AlwaysScrollableScrollPhysics(
                       parent: BouncingScrollPhysics(),
                     ),

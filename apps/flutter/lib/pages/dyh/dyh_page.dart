@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../components/status_bar_return_top.dart';
 import '../../pages/dyh/dyh_content.dart';
 import '../../pages/home/return_top_controller.dart';
 import '../../utils/device_util.dart';
@@ -12,7 +13,8 @@ class DyhPage extends StatefulWidget {
   State<DyhPage> createState() => _DyhPageState();
 }
 
-class _DyhPageState extends State<DyhPage> with TickerProviderStateMixin {
+class _DyhPageState extends State<DyhPage>
+    with TickerProviderStateMixin, StatusBarReturnTopBinding<DyhPage> {
   final String _id = Get.parameters['id'] ?? '';
   String _title = Get.parameters['title'] ?? '';
 
@@ -40,6 +42,10 @@ class _DyhPageState extends State<DyhPage> with TickerProviderStateMixin {
     Get.delete<ReturnTopController>(tag: _id + _title + _random);
     super.dispose();
   }
+
+  @override
+  void onStatusBarReturnTop() =>
+      _returnTopController.setIndex(_tabController.index);
 
   @override
   Widget build(BuildContext context) {

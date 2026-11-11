@@ -10,6 +10,7 @@ import 'package:get/get_navigation/src/dialog/dialog_route.dart';
 
 import '../../components/cards/app_info_card.dart';
 import '../../components/sticky_sliver_to_box_adapter.dart';
+import '../../components/status_bar_return_top.dart';
 import '../../logic/state/loading_state.dart';
 import '../../pages/app/app_content.dart';
 import '../../pages/app/app_controller.dart';
@@ -44,7 +45,8 @@ class AppPage extends StatefulWidget {
   State<AppPage> createState() => _AppPageState();
 }
 
-class _AppPageState extends State<AppPage> with TickerProviderStateMixin {
+class _AppPageState extends State<AppPage>
+    with TickerProviderStateMixin, StatusBarReturnTopBinding<AppPage> {
   final String _packageName = Get.parameters['packageName'].orEmpty;
   String? _url;
 
@@ -73,6 +75,10 @@ class _AppPageState extends State<AppPage> with TickerProviderStateMixin {
     Get.delete<ReturnTopController>(tag: _packageName + _random);
     super.dispose();
   }
+
+  @override
+  void onStatusBarReturnTop() =>
+      _returnTopController.setIndex(_tabController.index);
 
   Widget _buildAppInfo(AppController controller) {
     switch (controller.appState.value) {

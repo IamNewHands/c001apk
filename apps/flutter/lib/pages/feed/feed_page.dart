@@ -20,6 +20,7 @@ import '../../components/feed_article_body.dart';
 import '../../components/reading_presentation.dart';
 import '../../components/footer.dart';
 import '../../components/sliver_pinned_box_adapter.dart';
+import '../../components/status_bar_return_top.dart';
 import '../../components/cards/feed_card.dart';
 import '../../logic/model/feed/datum.dart';
 import '../../logic/media/feed_media_context.dart';
@@ -66,7 +67,8 @@ class FeedPage extends StatefulWidget {
   State<FeedPage> createState() => _FeedPageState();
 }
 
-class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
+class _FeedPageState extends State<FeedPage>
+    with TickerProviderStateMixin, StatusBarReturnTopBinding<FeedPage> {
   late final String _id = widget.id ?? Get.parameters['id'].orEmpty;
   final _refreshKey = GlobalKey<RefreshIndicatorState>();
   AnimationController? _fabAnimationCtr;
@@ -169,6 +171,9 @@ class _FeedPageState extends State<FeedPage> with TickerProviderStateMixin {
     Get.delete<FeedController>(tag: _id + _random);
     super.dispose();
   }
+
+  @override
+  void onStatusBarReturnTop() => _scrollController.animToTop();
 
   late final String _random = DeviceUtil.randHexString(8);
   late final _feedController = Get.put(

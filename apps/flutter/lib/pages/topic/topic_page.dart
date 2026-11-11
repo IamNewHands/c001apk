@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get/get_navigation/src/dialog/dialog_route.dart';
 
+import '../../components/status_bar_return_top.dart';
 import '../../logic/state/loading_state.dart';
 import '../../pages/home/return_top_controller.dart';
 import '../../pages/feed/reply/reply_page.dart';
@@ -52,7 +53,8 @@ class TopicPage extends StatefulWidget {
   State<TopicPage> createState() => _TopicPageState();
 }
 
-class _TopicPageState extends State<TopicPage> with TickerProviderStateMixin {
+class _TopicPageState extends State<TopicPage>
+    with TickerProviderStateMixin, StatusBarReturnTopBinding<TopicPage> {
   String? _tag = Get.parameters['tag'];
   final String? _id = Get.parameters['id'];
 
@@ -105,6 +107,10 @@ class _TopicPageState extends State<TopicPage> with TickerProviderStateMixin {
     Get.delete<TopicController>(tag: '$_tag$_id$_random');
     super.dispose();
   }
+
+  @override
+  void onStatusBarReturnTop() =>
+      _pageScrollController.setIndex(_tabController?.index ?? 0);
 
   void setShouldShowActions(int index) {
     _shouldShowActions = _topicController.entityType == 'product' &&

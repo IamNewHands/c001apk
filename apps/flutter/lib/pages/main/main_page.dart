@@ -15,6 +15,8 @@ import '../../components/adaptive_main_scaffold.dart';
 import '../../components/expressive_loading_indicator.dart';
 import '../../components/home_publish_action.dart';
 import '../../components/scroll_hiding_action.dart';
+import '../../components/status_bar_return_top.dart';
+import '../../utils/extensions.dart';
 import '../../utils/global_data.dart';
 
 class MainPage extends StatefulWidget {
@@ -25,7 +27,7 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, StatusBarReturnTopBinding<MainPage> {
   /// Destination order is 主页 / 关注 / 我的.
   static const int _profileDestination = 2;
 
@@ -40,6 +42,10 @@ class _MainPageState extends State<MainPage>
   var _contrller = PageController();
   bool _resetting = false;
   final _readingKey = GlobalKey<AdaptiveReadingPaneState>();
+
+  /// Owned here because 「我的」 has no scroll controller of its own and the
+  /// status bar tap needs one shared handle to scroll it back to the top.
+  final ScrollController _messageScrollController = ScrollController();
 
   @override
   void initState() {
@@ -71,6 +77,7 @@ class _MainPageState extends State<MainPage>
     _indexSctream.close();
     _contrller.dispose();
     _publishAnimation.dispose();
+    _messageScrollController.dispose();
     Get.delete<ReturnTopController>(tag: 'home');
     Get.delete<MainController>();
     super.dispose();
@@ -119,12 +126,27 @@ class _MainPageState extends State<MainPage>
                       },
                     ),
                     const FollowFeedPage(),
-                    const MessagePage(),
+                    MessagePage(scrollController: _messageScrollController),
                   ],
                 ),
               ),
             ),
           );
+  }
+
+  /// Tapping the iOS status bar strip scrolls the visible destination back to
+  /// the top. All three destinations share one route, so the dispatch happens
+  /// here rather than in each child page.
+  @override
+  void onStatusBarReturnTop() {
+    if (_resetting) return;
+    if (_selectedIndex == 0) {
+      _pageScrollController.setIndex(998);
+    } else if (_selectedIndex == 1) {
+      _pageScrollController.setIndex(TabType.FOLLOW.index);
+    } else {
+      _messageScrollController.animToTop();
+    }
   }
 
   void onDestinationSelected(int index) {

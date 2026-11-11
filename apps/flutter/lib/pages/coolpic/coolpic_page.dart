@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../components/status_bar_return_top.dart';
 import '../../pages/coolpic/coolpic_content.dart';
 import '../../pages/home/return_top_controller.dart';
 import '../../utils/device_util.dart';
@@ -13,7 +14,7 @@ class CoolpicPage extends StatefulWidget {
 }
 
 class _CoolpicPageState extends State<CoolpicPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, StatusBarReturnTopBinding<CoolpicPage> {
   String _title = Get.parameters['title'] ?? '';
 
   late final TabController _tabController =
@@ -40,6 +41,10 @@ class _CoolpicPageState extends State<CoolpicPage>
     Get.delete<ReturnTopController>(tag: _title + _random);
     super.dispose();
   }
+
+  @override
+  void onStatusBarReturnTop() =>
+      _returnTopController.setIndex(_tabController.index);
 
   @override
   Widget build(BuildContext context) {

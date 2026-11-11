@@ -15,6 +15,7 @@ import 'components/custom_toast.dart';
 import 'components/app_keyboard_navigation.dart';
 import 'components/app_navigation_history.dart';
 import 'components/prompt_navigation.dart';
+import 'components/status_bar_return_top.dart';
 import 'logic/accounts/account_store.dart';
 import 'logic/media/media_load_policy.dart';
 import 'logic/content_filter/app_content_filter.dart';
@@ -281,7 +282,12 @@ class _C001APKAPPState extends State<C001APKAPP> {
                 child: AppKeyboardNavigation(
                   navigatorKey: Get.key,
                   history: _navigationHistory,
-                  child: child!,
+                  // The status bar strip sits above the navigator so every route
+                  // inherits the tap target.
+                  child: Stack(children: [
+                    Positioned.fill(child: child!),
+                    const StatusBarTapDetector(),
+                  ]),
                 ),
               ),
             ),
